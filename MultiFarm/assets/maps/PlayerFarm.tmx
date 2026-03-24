@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PlayerFarm.tmx — Base map used for every private player farm.
+
+  This is the template cloned for each of the 8 player slots.
+  Build it in Tiled using one of the vanilla farm map files as a starting point
+  (find them in the Stardew Valley Content/Maps/ folder, e.g. Farm.tmx or
+  Farm_FourCorners.tmx — use xnb_node or StardewXnbHack to unpack them).
+
+  Required warp:
+    - Top edge, center (32, 1): warp → MultiFarm_Hub (return path)
+
+  The map should be the same size as a standard Stardew farm (80×65).
+  Choose whichever farm layout you want as the default — the farm type
+  selected in FarmSelectionMenu will be used to determine which variant
+  to load (once multiple templates are added).
+
+  Farm type file mapping (planned):
+    0 = PlayerFarm_Standard.tmx
+    1 = PlayerFarm_Riverland.tmx
+    2 = PlayerFarm_Forest.tmx
+    3 = PlayerFarm_HillTop.tmx
+    4 = PlayerFarm_Wilderness.tmx
+    5 = PlayerFarm_FourCorners.tmx
+    6 = PlayerFarm_Beach.tmx
+-->
+<map version="1.10" tiledversion="1.10.0"
+     orientation="orthogonal" renderorder="right-down"
+     width="80" height="65" tilewidth="16" tileheight="16"
+     infinite="0">
+
+  <!-- Replace this comment with the full map data once built in Tiled -->
+  <layer name="Back" width="80" height="65">
+    <data encoding="csv">
+      <!-- 80×65 = 5200 tile GIDs go here -->
+    </data>
+  </layer>
+
+</map>

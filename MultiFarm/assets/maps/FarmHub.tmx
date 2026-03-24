@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FarmHub.tmx — Placeholder map for the Farm Hub location.
+
+  This file needs to be built properly in Tiled (https://www.mapeditor.org/).
+  The map should be ~50 tiles wide × 35 tiles tall (outdoor scale).
+
+  Required warp tiles (match FarmHubManager.cs constants):
+    - Bottom center  (25, 30): warp → Farm
+    - Top center     (25,  2): warp → BusStop
+    - Slot 1  (38, 10): warp → MultiFarm_Player1
+    - Slot 2  (42, 10): warp → MultiFarm_Player2
+    - Slot 3  (22, 26): warp → MultiFarm_Player3
+    - Slot 4  (28, 26): warp → MultiFarm_Player4
+    - Slot 5  (34, 26): warp → MultiFarm_Player5
+    - Slot 6  (40, 26): warp → MultiFarm_Player6
+    - Slot 7  (10, 10): warp → MultiFarm_Player7
+    - Slot 8  (14, 10): warp → MultiFarm_Player8
+
+  Tilesets used by Stardew outdoor maps:
+    - spring_outdoorsTileSheet.png (season-variant)
+    - paths.png
+
+  Layer names expected by SMAPI/xTile:
+    - Back        (ground layer)
+    - Buildings   (structures/fences)
+    - Front       (above-player decorations)
+    - AlwaysFront (HUD-level, e.g. cliff edges)
+-->
+<map version="1.10" tiledversion="1.10.0"
+     orientation="orthogonal" renderorder="right-down"
+     width="50" height="35" tilewidth="16" tileheight="16"
+     infinite="0">
+
+  <!-- Replace this comment with the full map data once built in Tiled -->
+  <layer name="Back" width="50" height="35">
+    <data encoding="csv">
+      <!-- 50×35 = 1750 tile GIDs go here -->
+    </data>
+  </layer>
+
+</map>
