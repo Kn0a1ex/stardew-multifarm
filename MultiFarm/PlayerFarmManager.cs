@@ -63,6 +63,9 @@ namespace MultiFarm
         // UniqueMultiplayerID → chosen farm type
         private Dictionary<long, int>   _farmTypes    = new();
 
+        // UniqueMultiplayerID → chosen farm name
+        private Dictionary<long, string> _farmNames   = new();
+
         // players who have already received starter items this session
         private readonly HashSet<string> _starterItemsGiven = new();
 
@@ -74,14 +77,14 @@ namespace MultiFarm
 
         // ── Public API ───────────────────────────────────────────────────────
 
-        /// <summary>Assign a player to a farm slot with a chosen farm type.</summary>
-        public void AssignFarm(string playerName, int slot, int farmType = 0)
+        /// <summary>Assign a player to a farm slot with a chosen farm type and optional farm name.</summary>
+        public void AssignFarm(string playerName, int slot, int farmType = 0, string farmName = "")
         {
             if (slot < 1 || slot > ModEntry.Instance.Config.MaxPlayers)
                 throw new ArgumentOutOfRangeException(nameof(slot));
 
-            long id = Game1.getAllFarmers()
-                .FirstOrDefault(f => f.Name == playerName)?.UniqueMultiplayerID ?? 0;
+            var farmer = Game1.getAllFarmers().FirstOrDefault(f => f.Name == playerName);
+            long id = farmer?.UniqueMultiplayerID ?? 0;
 
             // Remove any previous assignment for this player (by name or ID)
             var toRemove = _assignments
@@ -91,7 +94,16 @@ namespace MultiFarm
             foreach (var k in toRemove) { _assignments.Remove(k); _assignmentIds.Remove(k); }
 
             _assignments[slot] = playerName;
-            if (id != 0) { _assignmentIds[slot] = id; _farmTypes[id] = farmType; }
+            if (id != 0)
+            {
+                _assignmentIds[slot] = id;
+                _farmTypes[id] = farmType;
+                if (!string.IsNullOrWhiteSpace(farmName))
+                {
+                    _farmNames[id] = farmName;
+                    if (farmer != null) farmer.farmName.Value = farmName;
+                }
+            }
 
             EnsurePlayerFarmsExist();
             SaveAssignments();
@@ -143,6 +155,24 @@ namespace MultiFarm
             return 0;
         }
 
+        /// <summary>Returns the display label for a hub portal: "[PlayerName] of [FarmName] Farm".</summary>
+        public string GetFarmDisplayLabel(int slot)
+        {
+            if (!_assignmentIds.TryGetValue(slot, out long id)) return "";
+            var farmer = Game1.getAllFarmers().FirstOrDefault(f => f.UniqueMultiplayerID == id);
+            string playerName = farmer?.Name ?? _assignments.GetValueOrDefault(slot, "");
+
+            // Prefer the live farmName field; fall back to cached value
+            string farmName = "";
+            if (farmer != null && !string.IsNullOrWhiteSpace(farmer.farmName?.Value))
+                farmName = farmer.farmName.Value;
+            else
+                _farmNames.TryGetValue(id, out farmName!);
+
+            if (string.IsNullOrWhiteSpace(farmName)) return playerName;
+            return $"{playerName} of {farmName} Farm";
+        }
+
         /// <summary>
         /// Show the FarmSelectionMenu to the local player.
         /// Called directly or in response to a MsgNeedsFarmSelection network message.
@@ -150,7 +180,7 @@ namespace MultiFarm
         public void ShowFarmSelectionMenu(Farmer player)
         {
             Game1.activeClickableMenu = new FarmSelectionMenu(player,
-                chosenType => OnFarmTypeChosen(player, chosenType));
+                (chosenType, farmName) => OnFarmTypeChosen(player, chosenType, farmName));
         }
 
         /// <summary>
@@ -177,33 +207,33 @@ namespace MultiFarm
         }
 
         /// <summary>
-        /// Called when the local player picks a farm type from the selection menu.
+        /// Called when the local player picks a farm type and name from the selection menu.
         /// If we're the host, assign immediately. Otherwise send the choice to the host.
         /// </summary>
-        public void OnFarmTypeChosen(Farmer player, int farmType)
+        public void OnFarmTypeChosen(Farmer player, int farmType, string farmName)
         {
             if (Context.IsMainPlayer)
             {
-                AssignAndWarp(player, farmType);
+                AssignAndWarp(player, farmType, farmName);
             }
             else
             {
                 _helper.Multiplayer.SendMessage(
-                    message:     new FarmChosenPayload { FarmType = farmType },
+                    message:     new FarmChosenPayload { FarmType = farmType, FarmName = farmName },
                     messageType: ModEntry.MsgFarmChosen,
                     modIDs:      new[] { _helper.ModRegistry.ModID }
                 );
-                _monitor.Log($"Sent farm-type choice ({farmType}) to host.", LogLevel.Debug);
+                _monitor.Log($"Sent farm-type choice ({farmType}, \"{farmName}\") to host.", LogLevel.Debug);
             }
         }
 
-        /// <summary>Host-side: a client sent their farm-type choice.</summary>
-        public void OnRemoteFarmTypeChosen(long senderID, int farmType)
+        /// <summary>Host-side: a client sent their farm-type and name choice.</summary>
+        public void OnRemoteFarmTypeChosen(long senderID, int farmType, string farmName)
         {
             var player = Game1.getAllFarmers().FirstOrDefault(f => f.UniqueMultiplayerID == senderID);
             if (player is null) return;
 
-            AssignAndWarp(player, farmType);
+            AssignAndWarp(player, farmType, farmName);
 
             _helper.Multiplayer.SendMessage(
                 message:     BuildSyncPayload(),
@@ -218,6 +248,7 @@ namespace MultiFarm
             _assignments   = payload.Assignments   ?? _assignments;
             _assignmentIds = payload.AssignmentIds ?? _assignmentIds;
             _farmTypes     = payload.FarmTypes     ?? _farmTypes;
+            _farmNames     = payload.FarmNames     ?? _farmNames;
             EnsurePlayerFarmsExist();
         }
 
@@ -278,6 +309,7 @@ namespace MultiFarm
                     _assignments   = data.Assignments   ?? new();
                     _assignmentIds = data.AssignmentIds ?? new();
                     _farmTypes     = data.FarmTypes     ?? new();
+                    _farmNames     = data.FarmNames     ?? new();
                     _monitor.Log($"Loaded {_assignments.Count} farm assignment(s).", LogLevel.Debug);
                 }
             }
@@ -296,6 +328,7 @@ namespace MultiFarm
                     Assignments   = _assignments,
                     AssignmentIds = _assignmentIds,
                     FarmTypes     = _farmTypes,
+                    FarmNames     = _farmNames,
                 });
             }
             catch (Exception ex)
@@ -345,13 +378,14 @@ namespace MultiFarm
             Assignments   = _assignments,
             AssignmentIds = _assignmentIds,
             FarmTypes     = _farmTypes,
+            FarmNames     = _farmNames,
         };
 
         /// <summary>
         /// Assign a slot to the given farmer, warp them there, and give starter items.
         /// Finds the first open slot automatically.
         /// </summary>
-        private void AssignAndWarp(Farmer farmer, int farmType)
+        private void AssignAndWarp(Farmer farmer, int farmType, string farmName = "")
         {
             // Reuse existing slot if the player already has one (e.g. changing farm type).
             int openSlot = GetSlotForPlayer(farmer.Name);
@@ -385,6 +419,13 @@ namespace MultiFarm
             _assignments[openSlot]   = farmer.Name;
             _assignmentIds[openSlot] = farmer.UniqueMultiplayerID;
             _farmTypes[farmer.UniqueMultiplayerID] = farmType;
+
+            // Store farm name and set it on the farmer so NPCs use it in dialogue
+            if (!string.IsNullOrWhiteSpace(farmName))
+            {
+                _farmNames[farmer.UniqueMultiplayerID] = farmName;
+                farmer.farmName.Value = farmName;
+            }
 
             EnsurePlayerFarmsExist();
             SaveAssignments();
@@ -515,23 +556,26 @@ namespace MultiFarm
 
         private class AssignmentData
         {
-            public Dictionary<int, string>? Assignments   { get; set; }
-            public Dictionary<int, long>?   AssignmentIds { get; set; }
-            public Dictionary<long, int>?   FarmTypes     { get; set; }
+            public Dictionary<int, string>?  Assignments   { get; set; }
+            public Dictionary<int, long>?    AssignmentIds { get; set; }
+            public Dictionary<long, int>?    FarmTypes     { get; set; }
+            public Dictionary<long, string>? FarmNames     { get; set; }
         }
 
         // ── Multiplayer message payloads ──────────────────────────────────────
 
         public class FarmChosenPayload
         {
-            public int FarmType { get; set; }
+            public int    FarmType { get; set; }
+            public string FarmName { get; set; } = "";
         }
 
         public class SyncPayload
         {
-            public Dictionary<int, string>? Assignments   { get; set; }
-            public Dictionary<int, long>?   AssignmentIds { get; set; }
-            public Dictionary<long, int>?   FarmTypes     { get; set; }
+            public Dictionary<int, string>?  Assignments   { get; set; }
+            public Dictionary<int, long>?    AssignmentIds { get; set; }
+            public Dictionary<long, int>?    FarmTypes     { get; set; }
+            public Dictionary<long, string>? FarmNames     { get; set; }
         }
     }
 }

@@ -133,8 +133,9 @@ namespace MultiFarm
             FarmManager.LoadAssignments();
 
             // Auto-assign host to slot 1 (vanilla Farm) if not yet assigned.
+            // Pass their existing farmName so the hub label reflects the vanilla-set name.
             if (Context.IsMainPlayer && FarmManager.GetSlotForPlayer(Game1.player.Name) == 0)
-                FarmManager.AssignFarm(Game1.player.Name, 1, 0);
+                FarmManager.AssignFarm(Game1.player.Name, 1, 0, Game1.player.farmName?.Value ?? "");
 
             FarmManager.EnsurePlayerFarmsExist();
 
@@ -199,18 +200,21 @@ namespace MultiFarm
 
             SpriteBatch b = e.SpriteBatch;
             string currentHub = Game1.currentLocation?.Name ?? "";
-            foreach (var (slot, name) in FarmManager.GetAssignments())
+            foreach (var (slot, _) in FarmManager.GetAssignments())
             {
                 var portal = FarmHubManager.GetSlotWarpTile(slot, currentHub);
                 if (portal == Point.Zero) continue;
 
+                string label = FarmManager.GetFarmDisplayLabel(slot);
+                if (string.IsNullOrEmpty(label)) continue;
+
                 // Center the label over the portal tile (one tile above it)
-                Vector2 measure  = Game1.smallFont.MeasureString(name);
+                Vector2 measure  = Game1.smallFont.MeasureString(label);
                 float   screenX  = portal.X * Game1.tileSize - Game1.viewport.X
                                    + (Game1.tileSize - measure.X) / 2f;
                 float   screenY  = (portal.Y - 1) * Game1.tileSize - Game1.viewport.Y;
 
-                Utility.drawTextWithShadow(b, name, Game1.smallFont,
+                Utility.drawTextWithShadow(b, label, Game1.smallFont,
                     new Vector2(screenX, screenY), Color.White);
             }
         }
@@ -232,11 +236,11 @@ namespace MultiFarm
                     break;
 
                 case MsgFarmChosen:
-                    // We are the host and a client sent their farm-type choice
+                    // We are the host and a client sent their farm-type and name choice
                     if (Game1.IsMasterGame)
                     {
                         var payload = e.ReadAs<PlayerFarmManager.FarmChosenPayload>();
-                        FarmManager.OnRemoteFarmTypeChosen(e.FromPlayerID, payload.FarmType);
+                        FarmManager.OnRemoteFarmTypeChosen(e.FromPlayerID, payload.FarmType, payload.FarmName);
                     }
                     break;
 
