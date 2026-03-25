@@ -20,8 +20,14 @@ Farm arrival from hub (OnWarped re-warps to correct position per hub source):
 
 import os
 
-OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "MultiFarm", "assets", "maps")
-os.makedirs(OUT_DIR, exist_ok=True)
+# Hub maps are served by the Content Patcher pack; player farm maps by the SMAPI mod.
+HUB_OUT_DIR  = os.path.join(os.path.dirname(__file__), "..", "[MultiFarm] Content", "assets", "maps")
+FARM_OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "MultiFarm", "assets", "maps")
+os.makedirs(HUB_OUT_DIR,  exist_ok=True)
+os.makedirs(FARM_OUT_DIR, exist_ok=True)
+
+# Backwards-compat alias used by build_player_farm / build_interior_template
+OUT_DIR = FARM_OUT_DIR
 
 # ---------------------------------------------------------------------------
 # Back-layer tile constants (firstgid=16 for outdoor sheet)
@@ -309,7 +315,7 @@ def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5), w=HUB_W, h=HUB_H)
   <objectgroup id="8" name="Paths" visible="false" locked="false" />
 </map>
 """
-    out_path = os.path.join(OUT_DIR, f"{hub_name}.tmx")
+    out_path = os.path.join(HUB_OUT_DIR, f"{hub_name}.tmx")
     with open(out_path, "w") as f:
         f.write(tmx.lstrip())
     print(f"Wrote {out_path}")

@@ -4,7 +4,6 @@ using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
-using System;
 
 namespace MultiFarm
 {
@@ -39,7 +38,6 @@ namespace MultiFarm
 
             new Harmony(ModManifest.UniqueID).PatchAll();
 
-            helper.Events.Content.AssetRequested        += OnAssetRequested;
             helper.Events.GameLoop.GameLaunched         += OnGameLaunched;
             helper.Events.GameLoop.SaveLoaded           += OnSaveLoaded;
             helper.Events.GameLoop.DayStarted           += OnDayStarted;
@@ -58,94 +56,9 @@ namespace MultiFarm
         }
 
         // ── Event handlers ───────────────────────────────────────────────────
-
-        // ── Asset pipeline ────────────────────────────────────────────────────
-
-        private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
-        {
-            // Serve all hub maps through SMAPI's content pipeline.
-            foreach (var hubName in new[] {
-                FarmHubManager.HubNameFarm,
-                FarmHubManager.HubNameBackwoods,
-                FarmHubManager.HubNameForest,
-            })
-            {
-                if (e.NameWithoutLocale.IsEquivalentTo($"Maps/{hubName}"))
-                {
-                    e.LoadFromModFile<xTile.Map>($"assets/maps/{hubName}.tmx", AssetLoadPriority.Medium);
-                    return;
-                }
-            }
-
-            if (!Config.ReplaceVanillaWarps) return;
-
-            // Redirect vanilla map Warp properties at asset-load time so warps survive
-            // map reloads and never show the intermediate location before the hub.
-            //
-            // Backwoods→Farm and Forest→Farm: redirect the return warps so leaving
-            // those maps brings you to the correct hub, not vanilla Farm.
-            if (e.NameWithoutLocale.IsEquivalentTo("Maps/Backwoods"))
-                e.Edit(asset => RedirectMapWarps(asset, "Farm",
-                    FarmHubManager.HubNameBackwoods,
-                    FarmHubManager.HubBackwoodsEntryFromBackwoods.X,
-                    FarmHubManager.HubBackwoodsEntryFromBackwoods.Y), AssetEditPriority.Default);
-
-            if (e.NameWithoutLocale.IsEquivalentTo("Maps/Forest"))
-                e.Edit(asset => RedirectMapWarps(asset, "Farm",
-                    FarmHubManager.HubNameForest,
-                    FarmHubManager.HubForestEntryFromForest.X,
-                    FarmHubManager.HubForestEntryFromForest.Y), AssetEditPriority.Default);
-
-            // Farm→Backwoods and Farm→Forest: redirect the vanilla Farm's edge warps
-            // so the host (slot 1) enters the correct hub directly.  Non-host farms
-            // have their own warps added at runtime in RegisterFarmLocation.
-            if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm"))
-                e.Edit(asset =>
-                {
-                    RedirectMapWarps(asset, "Backwoods",
-                        FarmHubManager.HubNameBackwoods,
-                        FarmHubManager.HubBackwoodsEntryFromFarm.X,
-                        FarmHubManager.HubBackwoodsEntryFromFarm.Y);
-                    RedirectMapWarps(asset, "Forest",
-                        FarmHubManager.HubNameForest,
-                        FarmHubManager.HubForestEntryFromFarm.X,
-                        FarmHubManager.HubForestEntryFromFarm.Y);
-                }, AssetEditPriority.Default);
-
-            // Farm↔BusStop: hardcoded in SDV 1.6 — intercepted by WarpInterceptPatch
-            // (Harmony prefix on Game1.warpFarmer) so no asset edit is possible here.
-        }
-
-        /// <summary>
-        /// Edit a map's Warp property, replacing every warp that targets
-        /// <paramref name="fromTarget"/> with one that targets <paramref name="toTarget"/>.
-        /// Warp format: space-separated 5-token groups — srcX srcY TargetMap targetX targetY.
-        /// </summary>
-        private static void RedirectMapWarps(IAssetData asset,
-            string fromTarget, string toTarget, int toX, int toY)
-        {
-            var map = asset.AsMap().Data;
-            if (!map.Properties.TryGetValue("Warp", out var warpProp)) return;
-
-            string[] tokens = warpProp.ToString()
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-            var result = new System.Text.StringBuilder();
-            for (int i = 0; i + 5 <= tokens.Length; i += 5)
-            {
-                if (tokens[i + 2].Equals(fromTarget, StringComparison.OrdinalIgnoreCase))
-                {
-                    tokens[i + 2] = toTarget;
-                    tokens[i + 3] = toX.ToString();
-                    tokens[i + 4] = toY.ToString();
-                }
-                if (result.Length > 0) result.Append(' ');
-                result.Append(
-                    $"{tokens[i]} {tokens[i+1]} {tokens[i+2]} {tokens[i+3]} {tokens[i+4]}");
-            }
-
-            map.Properties["Warp"] = result.ToString();
-        }
+        // Hub map loading and vanilla warp redirects are handled by the
+        // [MultiFarm] Content CP pack (content.json). Only the Farm↔BusStop
+        // redirect lives here, via WarpInterceptPatch (Harmony prefix).
 
         // ── Game loop ─────────────────────────────────────────────────────────
 
@@ -156,9 +69,6 @@ namespace MultiFarm
 
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
-            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameFarm}");
-            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameBackwoods}");
-            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameForest}");
             HubManager.RegisterLocations();
             FarmManager.LoadAssignments();
 
@@ -167,7 +77,6 @@ namespace MultiFarm
                 FarmManager.AssignFarm(Game1.player.Name, 1, 0);
 
             FarmManager.EnsurePlayerFarmsExist();
-            HubManager.PatchVanillaWarps();
 
             // Prompt any unassigned player to choose their farm type.
             if (FarmManager.GetSlotForPlayer(Game1.player.Name) == 0)
@@ -176,10 +85,9 @@ namespace MultiFarm
 
         private void OnDayStarted(object? sender, DayStartedEventArgs e)
         {
-            // Re-register and re-patch defensively — map reloads can reset both.
+            // Re-register defensively — map reloads can reset locations.
             HubManager.RegisterLocations();
             FarmManager.EnsurePlayerFarmsExist();
-            HubManager.PatchVanillaWarps();
 
             // Redirect married NPC home locations to the spouse's private farmhouse.
             // The schedule-string side is handled by NpcSchedulePatch (Harmony prefix).

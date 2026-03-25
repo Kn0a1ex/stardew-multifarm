@@ -1,0 +1,97 @@
+{
+  "Format": "2.0.0",
+  "Changes": [
+
+    // ── Hub map loading ───────────────────────────────────────────────────────
+    // Serve the three hub maps through the CP asset pipeline.
+    // The C# mod registers the GameLocations; CP provides the map data.
+    {
+      "Action": "Load",
+      "Target": "Maps/MultiFarm_Hub_Farm",
+      "FromFile": "assets/maps/MultiFarm_Hub_Farm.tmx"
+    },
+    {
+      "Action": "Load",
+      "Target": "Maps/MultiFarm_Hub_Backwoods",
+      "FromFile": "assets/maps/MultiFarm_Hub_Backwoods.tmx"
+    },
+    {
+      "Action": "Load",
+      "Target": "Maps/MultiFarm_Hub_Forest",
+      "FromFile": "assets/maps/MultiFarm_Hub_Forest.tmx"
+    },
+
+    // ── Warp redirects ────────────────────────────────────────────────────────
+    // These replace the vanilla Farm↔Backwoods and Farm↔Forest warp destinations
+    // so players pass through the hubs instead of going directly between maps.
+    // Farm↔BusStop is handled separately by a Harmony patch in the C# mod
+    // because it's hardcoded in SDV 1.6 and not stored in map Warp properties.
+
+    // Backwoods: redirect its Farm exit → Backwoods Hub north entrance
+    {
+      "Action": "EditMap",
+      "Target": "Maps/Backwoods",
+      "TextOperations": [
+        {
+          "Operation": "Replace",
+          "Target": [ "MapProperties", "Warp" ],
+          "Search": "Farm 40 0",
+          "Value": "MultiFarm_Hub_Backwoods 11 2"
+        }
+      ]
+    },
+
+    // Forest: redirect its Farm exit → Forest Hub south entrance
+    {
+      "Action": "EditMap",
+      "Target": "Maps/Forest",
+      "TextOperations": [
+        {
+          "Operation": "Replace",
+          "Target": [ "MapProperties", "Warp" ],
+          "Search": "Farm 41 64",
+          "Value": "MultiFarm_Hub_Forest 11 17"
+        }
+      ]
+    },
+
+    // Farm: redirect its Backwoods exit → Backwoods Hub; Forest exit → Forest Hub
+    {
+      "Action": "EditMap",
+      "Target": "Maps/Farm",
+      "TextOperations": [
+        {
+          "Operation": "Replace",
+          "Target": [ "MapProperties", "Warp" ],
+          "Search": "Backwoods 14 39",
+          "Value": "MultiFarm_Hub_Backwoods 2 17"
+        },
+        {
+          "Operation": "Replace",
+          "Target": [ "MapProperties", "Warp" ],
+          "Search": "Forest 68 0",
+          "Value": "MultiFarm_Hub_Forest 2 2"
+        }
+      ]
+    },
+
+    // ── Farm type selector ────────────────────────────────────────────────────
+    // Remove all non-Standard farm types from the new-game farm picker.
+    // Each player chooses their own farm layout via the in-game MultiFarm menu;
+    // the vanilla selector is only used for the host's slot-1 (vanilla Farm).
+    // Keeping only "Standard" means the host clicks one option and continues.
+    {
+      "Action": "EditData",
+      "Target": "Data/Farms",
+      "Entries": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      }
+    }
+
+  ]
+}

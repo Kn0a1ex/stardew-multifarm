@@ -1,0 +1,17 @@
+{
+  "Name": "MultiFarm Content",
+  "Author": "Alex",
+  "Version": "0.1.0",
+  "Description": "Content Patcher assets and patches for the MultiFarm mod.",
+  "UniqueID": "Alex.MultiFarm.Content",
+  "UpdateKeys": [],
+  "ContentPackFor": {
+    "UniqueID": "Pathoschild.ContentPatcher"
+  },
+  "Dependencies": [
+    {
+      "UniqueID": "Alex.MultiFarm",
+      "IsRequired": true
+    }
+  ]
+}

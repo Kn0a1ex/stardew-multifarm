@@ -1,7 +1,6 @@
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewValley;
-using System;
 using System.Collections.Generic;
 
 namespace MultiFarm
@@ -120,27 +119,6 @@ namespace MultiFarm
                 Game1.getLocationFromName(HubNameForest)    is not null;
         }
 
-        public void PatchVanillaWarps()
-        {
-            if (!ModEntry.Instance.Config.ReplaceVanillaWarps) return;
-            try
-            {
-                PatchWarp(Game1.getLocationFromName("Backwoods"), "Farm",
-                    HubNameBackwoods,
-                    HubBackwoodsEntryFromBackwoods.X, HubBackwoodsEntryFromBackwoods.Y);
-
-                PatchWarp(Game1.getLocationFromName("Forest"), "Farm",
-                    HubNameForest,
-                    HubForestEntryFromForest.X, HubForestEntryFromForest.Y);
-
-                _monitor.Log("Patched vanilla warps.", LogLevel.Debug);
-            }
-            catch (Exception ex)
-            {
-                _monitor.Log($"Failed to patch vanilla warps: {ex.Message}", LogLevel.Warn);
-            }
-        }
-
         public void OnPlayerEnterHub(Farmer player, string hubName)
         {
             int slot = ModEntry.Instance.FarmManager.GetSlotForPlayer(player.Name);
@@ -180,19 +158,5 @@ namespace MultiFarm
 
         // ── Helpers ──────────────────────────────────────────────────────────
 
-        private static void PatchWarp(GameLocation location, string targetLocation,
-            string newTarget, int newTargetX, int newTargetY)
-        {
-            if (location is null) return;
-            var warps = location.warps;
-            for (int i = 0; i < warps.Count; i++)
-            {
-                if (warps[i].TargetName.Equals(targetLocation, StringComparison.OrdinalIgnoreCase))
-                {
-                    int srcX = warps[i].X, srcY = warps[i].Y;
-                    warps[i] = new Warp(srcX, srcY, newTarget, newTargetX, newTargetY, false);
-                }
-            }
-        }
     }
 }
