@@ -1,0 +1,45 @@
+name: Build & Release
+
+# Trigger on version tags (e.g. v0.1.0) or manually via GitHub Actions UI
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create GitHub releases
+
+jobs:
+  build:
+    # Runs on YOUR Windows machine (self-hosted runner).
+    # The runner has Stardew Valley installed, so ModBuildConfig can find the game DLLs.
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build release zip
+        # ModBuildConfig auto-detects the game path on Windows.
+        # EnableModZip=true (set in .csproj) produces MultiFarm-<version>.zip.
+        run: dotnet build MultiFarm/MultiFarm.csproj -c Release
+        shell: pwsh
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          # On a manual run (workflow_dispatch) this creates a draft release named after the commit.
+          # On a tag push (v*) it creates a proper versioned release.
+          draft: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'Dev build' }}
+          body: |
+            ## Install
+
+            1. Install [SMAPI](https://smapi.io/) if you haven't already.
+            2. Download `MultiFarm-*.zip` below.
+            3. Extract it into your `Stardew Valley/Mods/` folder.
+            4. Launch the game through SMAPI.
+          files: MultiFarm/bin/Release/net6.0/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
