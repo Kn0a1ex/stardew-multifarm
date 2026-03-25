@@ -15,23 +15,5 @@
 
   "Changes": [
 
-    // ── Farm type selector ────────────────────────────────────────────────────
-    // Remove all non-Standard farm types from the new-game farm picker.
-    // Each player chooses their own farm layout via the in-game MultiFarm menu;
-    // the vanilla selector is only used for the host's slot-1 (vanilla Farm).
-    // Keeping only "Standard" means the host clicks one option and continues.
-    {
-      "Action": "EditData",
-      "Target": "Data/Farms",
-      "Entries": {
-        "1": null,
-        "2": null,
-        "3": null,
-        "4": null,
-        "5": null,
-        "6": null
-      }
-    }
-
   ]
 }

@@ -32,24 +32,15 @@ OUT_DIR = FARM_OUT_DIR
 # ---------------------------------------------------------------------------
 # Back-layer tile constants (firstgid=16 for outdoor sheet)
 # ---------------------------------------------------------------------------
-CLIFF  = 176   # dark soil/void border fill (Mountain.tmx background — no foliage)
-DARK   = 176   # same; using a single neutral value avoids tree tiles 367/396
+CLIFF  = 396   # solid cliff fill
+DARK   = 367   # dark outside-cliff fill
 GRASS_C= 423   # portal patch grass
 GRASS  = 191   # main interior grass
 ROAD   = 169   # dirt road
 EMPTY  = 0
 
-# ---------------------------------------------------------------------------
-# Front-layer tile constants (cliff face corners)
-# ---------------------------------------------------------------------------
-CF = [962, 962, 956, 956, 957, 982]
-CF1= [962, 956, 956, 957, 982, 1008]
-CF2= [962, 956, 957, 982, 1008,    0]
-CF3= [956, 981, 982, 1008,   0,    0]
-CF4= [957, 982, 1008,   0,   0,    0]
-CF5= [982, 1008,   0,   0,   0,    0]
-CF6= [1008,  0,   0,   0,   0,    0]
-CLIFF_FACE_ROWS = [CF, CF1, CF2, CF3, CF4, CF5, CF6]
+# Front layer: no corner decorations — the tree-graphic tiles previously used
+# here (962, 956, 957, 982, 1008) rendered as bush canopy, not cliff faces.
 
 # ---------------------------------------------------------------------------
 # Grid helpers
@@ -220,14 +211,8 @@ def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5), w=HUB_W, h=HUB_H)
     # ── PATHS layer ─────────────────────────────────────────────────────────
     paths = make_grid(W, H, EMPTY)
 
-    # ── FRONT layer — cliff face corners ────────────────────────────────────
+    # ── FRONT layer ─────────────────────────────────────────────────────────
     front = make_grid(W, H, EMPTY)
-    for fy, row in enumerate(CLIFF_FACE_ROWS):
-        for fx, t in enumerate(row):
-            set_tile(front, fx,     fy,     t)
-            set_tile(front, W-1-fx, fy,     t)
-            set_tile(front, fx,     H-1-fy, t)
-            set_tile(front, W-1-fx, H-1-fy, t)
 
     # ── AlwaysFront layer ───────────────────────────────────────────────────
     alwaysfront = make_grid(W, H, EMPTY)
@@ -286,7 +271,6 @@ def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5), w=HUB_W, h=HUB_H)
     <image source="spring_outdoorsTileSheet" width="400" height="1264" />
     <!-- NoSpawn=All on every grass tile used in hub maps prevents SDV from
          spawning bushes/foliage regardless of the external tileset properties. -->
-    <tile id="160"><properties><property name="NoSpawn" value="All"/></properties></tile>
     <tile id="175"><properties><property name="NoSpawn" value="All"/></properties></tile>
     <tile id="335"><properties><property name="NoSpawn" value="All"/></properties></tile>
     <tile id="351"><properties><property name="NoSpawn" value="All"/></properties></tile>
