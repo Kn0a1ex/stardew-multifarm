@@ -125,11 +125,32 @@ def build_hub(hub_name, entrance, warp_dest):
     set_col(back, W-2, CLIFF, 2, H-2)
     set_col(back, W-1, DARK,  2, H-2)
 
-    # E-W road path through the middle
-    for y in _PATH_YS:
-        set_row(back, y, ROAD, 2, W-2)
+    # Main spine + portal connectors — direction depends on entrance side
+    if entrance in ("west", "east"):
+        # Horizontal spine y=9-11, vertical branches to each portal
+        for y in _PATH_YS:
+            set_row(back, y, ROAD, 2, W-2)
+        for px, py in SLOT_POS[:4]:          # upper portals → down to spine top (y=9)
+            for cy in range(py+2, 9):
+                set_tile(back, px, cy, ROAD)
+        for px, py in SLOT_POS[4:]:          # lower portals → up from spine bottom (y=11)
+            for cy in range(12, py-1):
+                set_tile(back, px, cy, ROAD)
+    else:
+        # Vertical spine x=20-22, horizontal branches to each portal
+        for x in _PATH_XS:
+            set_col(back, x, ROAD, 2, H-2)
+        for px, py in SLOT_POS:
+            if px < _PATH_XS[0]:             # portal left of spine → road goes right
+                for cx in range(px+2, _PATH_XS[0]):
+                    set_tile(back, cx, py, ROAD)
+            elif px > _PATH_XS[-1]:          # portal right of spine → road goes left
+                for cx in range(_PATH_XS[-1]+1, px-1):
+                    set_tile(back, cx, py, ROAD)
+            # portals adjacent to spine need no extra connector
 
-    # Portal patches (3×3 GRASS_C centred on each portal tile)
+    # Portal patches (3×3 GRASS_C centred on each portal tile) — placed after
+    # connectors so patches always render on top of road tiles
     for px, py in SLOT_POS:
         for dy in range(-1, 2):
             for dx in range(-1, 2):
@@ -137,15 +158,7 @@ def build_hub(hub_name, entrance, warp_dest):
                 if 2 <= nx <= W-3 and 2 <= ny <= H-3:
                     back[ny][nx] = GRASS_C
 
-    # Vertical connectors: portals → horizontal path
-    for px, py in SLOT_POS[:4]:      # upper row → down to path top (y=9)
-        for cy in range(py+2, 9):
-            set_tile(back, px, cy, ROAD)
-    for px, py in SLOT_POS[4:]:      # lower row ← up from path bottom (y=11)
-        for cy in range(12, py-1):
-            set_tile(back, px, cy, ROAD)
-
-    # Entrance: punch through cliff border + add N-S connector for north/south hubs
+    # Entrance: punch through the cliff border
     if entrance == "west":
         for y in _PATH_YS:
             back[y][0] = ROAD
@@ -158,14 +171,10 @@ def build_hub(hub_name, entrance, warp_dest):
         for x in _PATH_XS:
             back[0][x] = ROAD
             back[1][x] = ROAD
-            for y in range(2, 9):    # connector from entrance down to path
-                back[y][x] = ROAD
     elif entrance == "south":
         for x in _PATH_XS:
             back[H-1][x] = ROAD
             back[H-2][x] = ROAD
-            for y in range(12, H-2): # connector from path down to entrance
-                back[y][x] = ROAD
 
     # ── BUILDINGS layer — collision ──────────────────────────────────────────
     # Any non-zero tile in Buildings = impassable. Cliff/dark border → GID 118.
