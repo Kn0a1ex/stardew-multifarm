@@ -3,3 +3,7 @@ obj/
 *.user
 .vs/
 *.suo
+# WinSCP encrypted temp files
+*.aesctr.enc
+# Vanilla map reference (not part of the mod, just local tooling)
+vanilla-maps/

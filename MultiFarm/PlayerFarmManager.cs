@@ -16,13 +16,13 @@ namespace MultiFarm
     ///
     /// Slot numbering: 1–8 (0 = unassigned).
     /// Each slot corresponds to:
-    ///   - A unique location name: "MultiFarm_Player1" … "MultiFarm_Player8"
+    ///   - A unique location name: "MultiFarm_Farm_1" … "MultiFarm_Farm_8"
     ///   - A map file:            assets/maps/PlayerFarm.tmx (shared base map)
     ///   - A save data entry:     persisted in data/assignments.json in the mod folder
     /// </summary>
     public class PlayerFarmManager
     {
-        private const string LocationPrefix    = "MultiFarm_Player";
+        private const string LocationPrefix    = "MultiFarm_Farm_";
         private const string AssignmentsFile   = "data/assignments.json";
 
         private readonly IModHelper _helper;
@@ -96,7 +96,7 @@ namespace MultiFarm
                 _monitor.Log($"Farm location '{locName}' not found.", LogLevel.Warn);
                 return;
             }
-            Game1.warpFarmer(locName, 32, 10, facingDirectionAfterWarp: 2);
+            Game1.warpFarmer(locName, 40, 5, facingDirectionAfterWarp: 2);
         }
 
         /// <summary>
@@ -164,15 +164,18 @@ namespace MultiFarm
                 var farmLoc = new Farm(mapPath, LocationName(slot));
                 Game1.locations.Add(farmLoc);
 
-                // Add hub return warp
-                var returnTile = FarmHubManager.GetFarmReturnTile();
-                var hubEntry   = FarmHubManager.GetSlotWarpTile(slot);
-                farmLoc.warps.Add(new Warp(
-                    returnTile.X, returnTile.Y,
-                    FarmHubManager.HubLocationName,
-                    hubEntry.X, hubEntry.Y,
-                    flipFarmer: false
-                ));
+                // Add return warps at the top edge (y=-1, x=38-42) → hub below slot portal.
+                // Using top-edge tiles avoids a warp loop with the hub→farm arrival at (40,5).
+                var hubArrival = FarmHubManager.GetHubArrivalForSlot(slot);
+                for (int rx = 38; rx <= 42; rx++)
+                {
+                    farmLoc.warps.Add(new Warp(
+                        rx, -1,
+                        FarmHubManager.HubLocationName,
+                        hubArrival.X, hubArrival.Y,
+                        flipFarmer: false
+                    ));
+                }
 
                 _monitor.Log($"Registered farm location for slot {slot}: '{LocationName(slot)}'.", LogLevel.Debug);
             }

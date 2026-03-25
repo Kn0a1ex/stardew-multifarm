@@ -3,56 +3,46 @@ using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Locations;
-using xTile;
-using xTile.Dimensions;
 using System;
 using System.Collections.Generic;
 
 namespace MultiFarm
 {
     /// <summary>
-    /// Manages the Farm Hub location — a shared outdoor area between the main farm
-    /// and the bus stop. Paths radiate out to each player's private farm (slots 1–8).
+    /// Manages the Farm Hub location — a shared outdoor area inserted between
+    /// the vanilla Farm and BusStop (FarmHub.tmx, 60×40).
     ///
-    /// Map layout (conceptual):
+    /// Map layout:
+    ///   [Farm] ←─── E-W path (y=18-22) ───→ [BusStop]
     ///
-    ///   [BusStop warp]  ←──── path north
-    ///                         │
-    ///   [Farm7][Farm8]──west──HUB──east──[Farm1][Farm2]
-    ///                         │
-    ///                    south paths
-    ///              [Farm3][Farm4][Farm5][Farm6]
-    ///                         │
-    ///                   [Farm warp]
+    ///   Upper portals (y=8):  Slot1(8,8)  Slot2(20,8)  Slot3(32,8)  Slot4(44,8)
+    ///   Lower portals (y=28): Slot5(8,28) Slot6(20,28) Slot7(32,28) Slot8(44,28)
+    ///
+    /// Vanilla warp patches (applied after each save load):
+    ///   Farm  → BusStop  redirected to  Hub at (2, 20)
+    ///   BusStop → Farm   redirected to  Hub at (57, 20)
     /// </summary>
     public class FarmHubManager
     {
         public const string HubLocationName = "MultiFarm_Hub";
 
-        // Warp tile positions on the hub map (tile coords, direction OUT of hub).
-        // These must match the TMX map you build in Tiled.
+        // Portal tile positions on the hub map — must match FarmHub.tmx Warp entries.
+        // Players arriving from a player farm land at (portal.X, portal.Y + 2).
         private static readonly Dictionary<int, Point> SlotWarpTiles = new()
         {
-            { 1, new Point(38, 10) },
-            { 2, new Point(42, 10) },
-            { 3, new Point(22, 26) },
-            { 4, new Point(28, 26) },
-            { 5, new Point(34, 26) },
-            { 6, new Point(40, 26) },
-            { 7, new Point(10, 10) },
-            { 8, new Point(14, 10) },
+            { 1, new Point( 8,  8) },
+            { 2, new Point(20,  8) },
+            { 3, new Point(32,  8) },
+            { 4, new Point(44,  8) },
+            { 5, new Point( 8, 28) },
+            { 6, new Point(20, 28) },
+            { 7, new Point(32, 28) },
+            { 8, new Point(44, 28) },
         };
 
-        // Where the hub connects back to vanilla locations
-        private const string VanillaFarmWarpTile    = "Farm";        // source location
-        private const string VanillaBusStopWarpTile = "BusStop";     // source location
-
-        // Hub entry/exit tile coords (must match TMX)
-        private static readonly Point HubEntryFromFarm    = new(25, 30);   // bottom of hub
-        private static readonly Point HubEntryFromBusStop = new(25,  2);   // top of hub
-
-        // Return warp positions on each player farm map (top-center of the map)
-        private static readonly Point FarmReturnWarpTile = new(32, 1);
+        // Where players arrive in the hub when coming from vanilla locations
+        private static readonly Point HubEntryFromFarm    = new( 2, 20);  // left side of hub
+        private static readonly Point HubEntryFromBusStop = new(57, 20);  // right side of hub
 
         public bool IsRegistered { get; private set; }
 
@@ -160,8 +150,13 @@ namespace MultiFarm
         }
 
         /// <summary>
-        /// Get the warp-back tile that a player farm should use to return to the hub.
+        /// Get the hub arrival position for a player returning from a specific farm slot.
+        /// Lands 2 tiles below the portal so players don't immediately re-enter.
         /// </summary>
-        public static Point GetFarmReturnTile() => FarmReturnWarpTile;
+        public static Point GetHubArrivalForSlot(int slot)
+        {
+            var portal = GetSlotWarpTile(slot);
+            return new Point(portal.X, portal.Y + 2);
+        }
     }
 }

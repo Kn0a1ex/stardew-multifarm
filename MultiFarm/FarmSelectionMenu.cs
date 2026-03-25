@@ -138,7 +138,7 @@ namespace MultiFarm
         {
             // Very basic word-wrap for the card descriptions
             var words  = text.Split(' ');
-            var result = System.Text.StringBuilder.Pool.Get();
+            var result = new System.Text.StringBuilder();
             var line   = new System.Text.StringBuilder();
             foreach (var word in words)
             {
