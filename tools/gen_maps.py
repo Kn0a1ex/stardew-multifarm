@@ -105,12 +105,14 @@ _PATH_YS = range(9, 12)
 _PATH_XS = range(20, 23)
 
 
-def build_hub(hub_name, entrance, warp_dest):
+def build_hub(hub_name, exits):
     """
-    entrance:  "west" | "east" | "north" | "south"
-    warp_dest: (dest_map, dest_x, dest_y)
+    exits: dict mapping side → (dest_map, dest_x, dest_y)
+    Example (Farm Hub): {"west": ("Farm", 79, 17), "east": ("BusStop", 11, 23)}
+    Spine direction: horizontal if any west/east exit, vertical if north/south only.
     """
     W, H = HUB_W, HUB_H
+    has_horiz = "west" in exits or "east" in exits
 
     # ── BACK layer ─────────────────────────────────────────────────────────
     back = make_grid(W, H, GRASS)
@@ -125,8 +127,8 @@ def build_hub(hub_name, entrance, warp_dest):
     set_col(back, W-2, CLIFF, 2, H-2)
     set_col(back, W-1, DARK,  2, H-2)
 
-    # Main spine + portal connectors — direction depends on entrance side
-    if entrance in ("west", "east"):
+    # Main spine + portal connectors — direction depends on exits
+    if has_horiz:
         # Horizontal spine y=9-11, vertical branches to each portal
         for y in _PATH_YS:
             set_row(back, y, ROAD, 2, W-2)
@@ -147,10 +149,8 @@ def build_hub(hub_name, entrance, warp_dest):
             elif px > _PATH_XS[-1]:          # portal right of spine → road goes left
                 for cx in range(_PATH_XS[-1]+1, px-1):
                     set_tile(back, cx, py, ROAD)
-            # portals adjacent to spine need no extra connector
 
-    # Portal patches (3×3 GRASS_C centred on each portal tile) — placed after
-    # connectors so patches always render on top of road tiles
+    # Portal patches (3×3 GRASS_C) — placed after connectors so they render on top
     for px, py in SLOT_POS:
         for dy in range(-1, 2):
             for dx in range(-1, 2):
@@ -158,26 +158,22 @@ def build_hub(hub_name, entrance, warp_dest):
                 if 2 <= nx <= W-3 and 2 <= ny <= H-3:
                     back[ny][nx] = GRASS_C
 
-    # Entrance: punch through the cliff border
-    if entrance == "west":
-        for y in _PATH_YS:
-            back[y][0] = ROAD
-            back[y][1] = ROAD
-    elif entrance == "east":
-        for y in _PATH_YS:
-            back[y][W-1] = ROAD
-            back[y][W-2] = ROAD
-    elif entrance == "north":
-        for x in _PATH_XS:
-            back[0][x] = ROAD
-            back[1][x] = ROAD
-    elif entrance == "south":
-        for x in _PATH_XS:
-            back[H-1][x] = ROAD
-            back[H-2][x] = ROAD
+    # Punch through cliff border for every exit side
+    for side in exits:
+        if side == "west":
+            for y in _PATH_YS:
+                back[y][0] = ROAD;  back[y][1] = ROAD
+        elif side == "east":
+            for y in _PATH_YS:
+                back[y][W-1] = ROAD;  back[y][W-2] = ROAD
+        elif side == "north":
+            for x in _PATH_XS:
+                back[0][x] = ROAD;  back[1][x] = ROAD
+        elif side == "south":
+            for x in _PATH_XS:
+                back[H-1][x] = ROAD;  back[H-2][x] = ROAD
 
     # ── BUILDINGS layer — collision ──────────────────────────────────────────
-    # Any non-zero tile in Buildings = impassable. Cliff/dark border → GID 118.
     buildings = make_grid(W, H, EMPTY)
     for y in range(H):
         for x in range(W):
@@ -200,16 +196,16 @@ def build_hub(hub_name, entrance, warp_dest):
     alwaysfront = make_grid(W, H, EMPTY)
 
     # ── Warp property string ────────────────────────────────────────────────
-    dm, dx, dy = warp_dest
     warp_parts = []
-    if entrance == "west":
-        warp_parts.append(" ".join(f"-1 {y} {dm} {dx} {dy}" for y in _PATH_YS))
-    elif entrance == "east":
-        warp_parts.append(" ".join(f"{W} {y} {dm} {dx} {dy}" for y in _PATH_YS))
-    elif entrance == "north":
-        warp_parts.append(" ".join(f"{x} -1 {dm} {dx} {dy}" for x in _PATH_XS))
-    elif entrance == "south":
-        warp_parts.append(" ".join(f"{x} {H} {dm} {dx} {dy}" for x in _PATH_XS))
+    for side, (dm, dx, dy) in exits.items():
+        if side == "west":
+            warp_parts.append(" ".join(f"-1 {y} {dm} {dx} {dy}" for y in _PATH_YS))
+        elif side == "east":
+            warp_parts.append(" ".join(f"{W} {y} {dm} {dx} {dy}" for y in _PATH_YS))
+        elif side == "north":
+            warp_parts.append(" ".join(f"{x} -1 {dm} {dx} {dy}" for x in _PATH_XS))
+        elif side == "south":
+            warp_parts.append(" ".join(f"{x} {H} {dm} {dx} {dy}" for x in _PATH_XS))
 
     warp_parts.append(" ".join(
         f"{px} {py} MultiFarm_Farm_{i+1} 40 5"
@@ -414,29 +410,26 @@ def build_interior_template(vanilla_name, output_name):
 
 
 if __name__ == "__main__":
-    # Farm Hub — entered from vanilla Farm map (east edge intercepted by OnWarped)
-    build_hub("MultiFarm_Hub_Farm",
-        entrance="west",
-        warp_dest=("Farm", 79, 17),
-    )
+    # Farm Hub — sits on the Farm↔BusStop road; exits both west (Farm) and east (BusStop).
+    # Entered from Farm east edge OR BusStop west edge (both intercepted by OnWarped).
+    build_hub("MultiFarm_Hub_Farm", exits={
+        "west": ("Farm",    79, 17),
+        "east": ("BusStop", 11, 23),
+    })
 
-    # BusStop Hub — entered from vanilla BusStop map (west edge intercepted by OnWarped)
-    build_hub("MultiFarm_Hub_BusStop",
-        entrance="east",
-        warp_dest=("BusStop", 11, 23),
-    )
+    # Backwoods Hub — vertical spine; exits north (Backwoods) and south (Farm mountain trail).
+    # Entered from Backwoods south edge (warp patched in map) OR Farm north edge (OnWarped).
+    build_hub("MultiFarm_Hub_Backwoods", exits={
+        "north": ("Backwoods", 14, 38),
+        "south": ("Farm",      54,  4),
+    })
 
-    # Backwoods Hub — entered from Backwoods south edge (warp patched in map)
-    build_hub("MultiFarm_Hub_Backwoods",
-        entrance="north",
-        warp_dest=("Backwoods", 14, 38),
-    )
-
-    # Forest Hub — entered from Forest north edge (warp patched in map)
-    build_hub("MultiFarm_Hub_Forest",
-        entrance="south",
-        warp_dest=("Forest", 68, 1),
-    )
+    # Forest Hub — vertical spine; exits south (Forest) and north (Farm south edge).
+    # Entered from Forest north edge (warp patched in map) OR Farm south edge (OnWarped).
+    build_hub("MultiFarm_Hub_Forest", exits={
+        "south": ("Forest", 68,  1),
+        "north": ("Farm",   68, 63),
+    })
 
     for type_id in FARM_TYPE_SOURCES:
         build_player_farm(type_id)
@@ -444,11 +437,13 @@ if __name__ == "__main__":
     build_interior_template("FarmCave.tmx",  "PlayerFarmCave.tmx")
     build_interior_template("FarmHouse.tmx", "PlayerFarmHouse.tmx")
 
-    print("\nSlot portal positions (same in all 4 hubs):")
+    print("\nSlot portal positions (same in all 3 hubs):")
     for i, (x, y) in enumerate(SLOT_POS):
         print(f"  Slot {i+1}: ({x}, {y})")
-    print(f"\nHub entry coordinates (used in FarmHubManager.cs):")
-    print(f"  Farm Hub    (west  entrance): arrive at ( 2, 10)")
-    print(f"  BusStop Hub (east  entrance): arrive at (41, 10)")
-    print(f"  Backwoods Hub (north entrance): arrive at (21,  2)")
-    print(f"  Forest Hub  (south entrance): arrive at (21, 21)")
+    print(f"\nHub entry coordinates:")
+    print(f"  Farm Hub    from Farm    (west  side): ( 2, 10)")
+    print(f"  Farm Hub    from BusStop (east  side): (41, 10)")
+    print(f"  Backwoods Hub from Backwoods (north): (21,  2)")
+    print(f"  Backwoods Hub from Farm      (south): (21, 21)")
+    print(f"  Forest Hub  from Forest  (south): (21, 21)")
+    print(f"  Forest Hub  from Farm    (north): (21,  2)")

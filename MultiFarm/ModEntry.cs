@@ -68,7 +68,6 @@ namespace MultiFarm
             // fixing the Ghost Warp bug (black screen / no arrival).
             foreach (var hubName in new[] {
                 FarmHubManager.HubNameFarm,
-                FarmHubManager.HubNameBusStop,
                 FarmHubManager.HubNameBackwoods,
                 FarmHubManager.HubNameForest,
             })
@@ -87,14 +86,14 @@ namespace MultiFarm
             if (e.NameWithoutLocale.IsEquivalentTo("Maps/Backwoods"))
                 e.Edit(asset => RedirectMapWarps(asset, "Farm",
                     FarmHubManager.HubNameBackwoods,
-                    FarmHubManager.HubBackwoodsEntry.X,
-                    FarmHubManager.HubBackwoodsEntry.Y), AssetEditPriority.Default);
+                    FarmHubManager.HubBackwoodsEntryFromBackwoods.X,
+                    FarmHubManager.HubBackwoodsEntryFromBackwoods.Y), AssetEditPriority.Default);
 
             if (e.NameWithoutLocale.IsEquivalentTo("Maps/Forest"))
                 e.Edit(asset => RedirectMapWarps(asset, "Farm",
                     FarmHubManager.HubNameForest,
-                    FarmHubManager.HubForestEntry.X,
-                    FarmHubManager.HubForestEntry.Y), AssetEditPriority.Default);
+                    FarmHubManager.HubForestEntryFromForest.X,
+                    FarmHubManager.HubForestEntryFromForest.Y), AssetEditPriority.Default);
         }
 
         /// <summary>
@@ -139,7 +138,6 @@ namespace MultiFarm
         {
             // Invalidate all hub map assets so they're freshly loaded each save.
             Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameFarm}");
-            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameBusStop}");
             Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameBackwoods}");
             Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameForest}");
             HubManager.RegisterLocations();
@@ -199,20 +197,36 @@ namespace MultiFarm
             // fires and immediately redirect the player to the correct hub.
             if (e.Player.IsLocalPlayer)
             {
-                // Farm east edge → Farm Hub (west entrance, face right)
+                // Farm east edge → Farm Hub west entrance
                 if (e.NewLocation?.Name == "BusStop" && e.OldLocation?.Name == "Farm")
                 {
                     Game1.warpFarmer(FarmHubManager.HubNameFarm,
-                        FarmHubManager.HubFarmEntry.X,
-                        FarmHubManager.HubFarmEntry.Y, 1);
+                        FarmHubManager.HubFarmEntryFromFarm.X,
+                        FarmHubManager.HubFarmEntryFromFarm.Y, 1);
                     return;
                 }
-                // BusStop west edge → BusStop Hub (east entrance, face left)
+                // BusStop west edge → Farm Hub east entrance
                 if (e.NewLocation?.Name == "Farm" && e.OldLocation?.Name == "BusStop")
                 {
-                    Game1.warpFarmer(FarmHubManager.HubNameBusStop,
-                        FarmHubManager.HubBusStopEntry.X,
-                        FarmHubManager.HubBusStopEntry.Y, 3);
+                    Game1.warpFarmer(FarmHubManager.HubNameFarm,
+                        FarmHubManager.HubFarmEntryFromBusStop.X,
+                        FarmHubManager.HubFarmEntryFromBusStop.Y, 3);
+                    return;
+                }
+                // Farm north trail → Backwoods Hub south entrance
+                if (e.NewLocation?.Name == "Backwoods" && e.OldLocation?.Name == "Farm")
+                {
+                    Game1.warpFarmer(FarmHubManager.HubNameBackwoods,
+                        FarmHubManager.HubBackwoodsEntryFromFarm.X,
+                        FarmHubManager.HubBackwoodsEntryFromFarm.Y, 2);
+                    return;
+                }
+                // Farm south edge → Forest Hub north entrance
+                if (e.NewLocation?.Name == "Forest" && e.OldLocation?.Name == "Farm")
+                {
+                    Game1.warpFarmer(FarmHubManager.HubNameForest,
+                        FarmHubManager.HubForestEntryFromFarm.X,
+                        FarmHubManager.HubForestEntryFromFarm.Y, 0);
                     return;
                 }
             }

@@ -7,32 +7,28 @@ using System.Collections.Generic;
 namespace MultiFarm
 {
     /// <summary>
-    /// Manages the four independent Farm Hub locations that connect vanilla areas to
+    /// Manages the three Farm Hub locations that connect vanilla areas to
     /// player-private farms (each hub is 44×24 tiles).
     ///
-    ///   Farm Hub      ←── vanilla Farm map  (west entrance)
-    ///   BusStop Hub   ←── vanilla BusStop   (east entrance)
-    ///   Backwoods Hub ←── vanilla Backwoods (north entrance)
-    ///   Forest Hub    ←── vanilla Forest    (south entrance)
+    ///   Farm Hub      ←──── vanilla Farm (west)   ────→ vanilla BusStop (east)
+    ///   Backwoods Hub ←──── vanilla Backwoods (north) / vanilla Farm north trail (south)
+    ///   Forest Hub    ←──── vanilla Forest (south) / vanilla Farm south edge (north)
     ///
     ///   All hubs share the same 8 portal slot positions:
     ///     Upper row (y=5):  Slot1(6,5)  Slot2(15,5)  Slot3(24,5)  Slot4(33,5)
     ///     Lower row (y=16): Slot5(6,16) Slot6(15,16) Slot7(24,16) Slot8(33,16)
     ///
-    ///   Player farm top edge → Farm Hub.
+    ///   Player farm top edge → Backwoods Hub (south entrance).
+    ///   Player farm south edge → Forest Hub (north entrance).
     /// </summary>
     public class FarmHubManager
     {
         // ── Location names ────────────────────────────────────────────────────
         public const string HubNameFarm      = "MultiFarm_Hub_Farm";
-        public const string HubNameBusStop   = "MultiFarm_Hub_BusStop";
         public const string HubNameBackwoods = "MultiFarm_Hub_Backwoods";
         public const string HubNameForest    = "MultiFarm_Hub_Forest";
 
-        /// <summary>Primary hub — player farm top-edge return warp lands here.</summary>
-        public const string HubLocationName = HubNameFarm;
-
-        // ── Portal positions (identical in all 4 hubs) ────────────────────────
+        // ── Portal positions (identical in all 3 hubs) ────────────────────────
         // Players arriving from a player farm land at (portal.X, portal.Y + 2).
         private static readonly Dictionary<int, Point> SlotWarpTiles = new()
         {
@@ -46,11 +42,17 @@ namespace MultiFarm
             { 8, new Point(33, 16) },
         };
 
-        // ── Hub entry points (player arrives just inside the entrance) ─────────
-        public static readonly Point HubFarmEntry      = new( 2, 10);  // west entrance
-        public static readonly Point HubBusStopEntry   = new(41, 10);  // east entrance
-        public static readonly Point HubBackwoodsEntry = new(21,  2);  // north entrance
-        public static readonly Point HubForestEntry    = new(21, 21);  // south entrance
+        // ── Farm Hub entry points (horizontal hub, west+east exits) ───────────
+        public static readonly Point HubFarmEntryFromFarm    = new( 2, 10);  // from Farm west
+        public static readonly Point HubFarmEntryFromBusStop = new(41, 10);  // from BusStop east
+
+        // ── Backwoods Hub entry points (vertical hub, north+south exits) ──────
+        public static readonly Point HubBackwoodsEntryFromBackwoods = new(21,  2);  // from Backwoods north
+        public static readonly Point HubBackwoodsEntryFromFarm      = new(21, 21);  // from Farm south (mountain trail)
+
+        // ── Forest Hub entry points (vertical hub, north+south exits) ─────────
+        public static readonly Point HubForestEntryFromForest = new(21, 21);  // from Forest south
+        public static readonly Point HubForestEntryFromFarm   = new(21,  2);  // from Farm north (south edge)
 
         public bool IsRegistered { get; private set; }
 
@@ -71,7 +73,6 @@ namespace MultiFarm
         {
             bool allPresent =
                 Game1.getLocationFromName(HubNameFarm)      is not null &&
-                Game1.getLocationFromName(HubNameBusStop)   is not null &&
                 Game1.getLocationFromName(HubNameBackwoods) is not null &&
                 Game1.getLocationFromName(HubNameForest)    is not null;
 
@@ -84,7 +85,6 @@ namespace MultiFarm
             foreach (var (name, mapFile) in new[]
             {
                 (HubNameFarm,      $"Maps/{HubNameFarm}"),
-                (HubNameBusStop,   $"Maps/{HubNameBusStop}"),
                 (HubNameBackwoods, $"Maps/{HubNameBackwoods}"),
                 (HubNameForest,    $"Maps/{HubNameForest}"),
             })
@@ -109,7 +109,6 @@ namespace MultiFarm
 
             IsRegistered =
                 Game1.getLocationFromName(HubNameFarm)      is not null &&
-                Game1.getLocationFromName(HubNameBusStop)   is not null &&
                 Game1.getLocationFromName(HubNameBackwoods) is not null &&
                 Game1.getLocationFromName(HubNameForest)    is not null;
         }
@@ -125,13 +124,15 @@ namespace MultiFarm
 
             try
             {
-                // Backwoods → Backwoods Hub (was Backwoods → Farm)
+                // Backwoods south edge → Backwoods Hub north entrance
                 PatchWarp(Game1.getLocationFromName("Backwoods"), "Farm",
-                    HubNameBackwoods, HubBackwoodsEntry.X, HubBackwoodsEntry.Y);
+                    HubNameBackwoods,
+                    HubBackwoodsEntryFromBackwoods.X, HubBackwoodsEntryFromBackwoods.Y);
 
-                // Forest → Forest Hub (was Forest → Farm)
+                // Forest north edge → Forest Hub south entrance
                 PatchWarp(Game1.getLocationFromName("Forest"), "Farm",
-                    HubNameForest, HubForestEntry.X, HubForestEntry.Y);
+                    HubNameForest,
+                    HubForestEntryFromForest.X, HubForestEntryFromForest.Y);
 
                 _monitor.Log("Patched vanilla warps: Backwoods → BackwoodsHub, Forest → ForestHub.", LogLevel.Debug);
             }
@@ -151,10 +152,9 @@ namespace MultiFarm
             }
         }
 
-        /// <summary>Returns true if the given location name is one of the four hub locations.</summary>
+        /// <summary>Returns true if the given location name is one of the three hub locations.</summary>
         public static bool IsHubLocation(string? name) =>
-            name == HubNameFarm      || name == HubNameBusStop ||
-            name == HubNameBackwoods || name == HubNameForest;
+            name == HubNameFarm || name == HubNameBackwoods || name == HubNameForest;
 
         // ── Helpers ──────────────────────────────────────────────────────────
 
