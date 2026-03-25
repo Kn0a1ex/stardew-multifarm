@@ -90,9 +90,10 @@ namespace MultiFarm
                 bool hovered = (i == _hoveredIndex);
                 Color bg = hovered ? Color.LightGoldenrodYellow : Color.White;
 
-                IClickableMenu.drawTextureBox(b, xPositionOnScreen: card.Bounds.X,
-                    yPositionOnScreen: card.Bounds.Y, width: card.Bounds.Width,
-                    height: card.Bounds.Height, color: bg);
+                IClickableMenu.drawTextureBox(b, Game1.menuTexture,
+                    new Microsoft.Xna.Framework.Rectangle(0, 256, 60, 60),
+                    card.Bounds.X, card.Bounds.Y, card.Bounds.Width, card.Bounds.Height,
+                    bg);
 
                 b.DrawString(Game1.smallFont, card.Name,
                     new Vector2(card.Bounds.X + 8, card.Bounds.Y + 8), Game1.textColor);
