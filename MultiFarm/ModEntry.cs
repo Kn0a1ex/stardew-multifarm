@@ -63,23 +63,21 @@ namespace MultiFarm
 
         private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
         {
-            // Serve all three hub maps through SMAPI's content pipeline.
+            // Serve all four hub maps through SMAPI's content pipeline.
             // The Maps/ prefix ensures SDV fully initialises the location,
             // fixing the Ghost Warp bug (black screen / no arrival).
-            if (e.NameWithoutLocale.IsEquivalentTo($"Maps/{FarmHubManager.HubNameEast}"))
+            foreach (var hubName in new[] {
+                FarmHubManager.HubNameFarm,
+                FarmHubManager.HubNameBusStop,
+                FarmHubManager.HubNameBackwoods,
+                FarmHubManager.HubNameForest,
+            })
             {
-                e.LoadFromModFile<xTile.Map>($"assets/maps/{FarmHubManager.HubNameEast}.tmx", AssetLoadPriority.Medium);
-                return;
-            }
-            if (e.NameWithoutLocale.IsEquivalentTo($"Maps/{FarmHubManager.HubNameNorth}"))
-            {
-                e.LoadFromModFile<xTile.Map>($"assets/maps/{FarmHubManager.HubNameNorth}.tmx", AssetLoadPriority.Medium);
-                return;
-            }
-            if (e.NameWithoutLocale.IsEquivalentTo($"Maps/{FarmHubManager.HubNameSouth}"))
-            {
-                e.LoadFromModFile<xTile.Map>($"assets/maps/{FarmHubManager.HubNameSouth}.tmx", AssetLoadPriority.Medium);
-                return;
+                if (e.NameWithoutLocale.IsEquivalentTo($"Maps/{hubName}"))
+                {
+                    e.LoadFromModFile<xTile.Map>($"assets/maps/{hubName}.tmx", AssetLoadPriority.Medium);
+                    return;
+                }
             }
 
             if (!Config.ReplaceVanillaWarps) return;
@@ -88,15 +86,15 @@ namespace MultiFarm
             // map reloads (unlike runtime PatchVanillaWarps which runs only once).
             if (e.NameWithoutLocale.IsEquivalentTo("Maps/Backwoods"))
                 e.Edit(asset => RedirectMapWarps(asset, "Farm",
-                    FarmHubManager.HubNameNorth,
-                    FarmHubManager.HubNorthEntryFromBackwoods.X,
-                    FarmHubManager.HubNorthEntryFromBackwoods.Y), AssetEditPriority.Default);
+                    FarmHubManager.HubNameBackwoods,
+                    FarmHubManager.HubBackwoodsEntry.X,
+                    FarmHubManager.HubBackwoodsEntry.Y), AssetEditPriority.Default);
 
             if (e.NameWithoutLocale.IsEquivalentTo("Maps/Forest"))
                 e.Edit(asset => RedirectMapWarps(asset, "Farm",
-                    FarmHubManager.HubNameSouth,
-                    FarmHubManager.HubSouthEntryFromForest.X,
-                    FarmHubManager.HubSouthEntryFromForest.Y), AssetEditPriority.Default);
+                    FarmHubManager.HubNameForest,
+                    FarmHubManager.HubForestEntry.X,
+                    FarmHubManager.HubForestEntry.Y), AssetEditPriority.Default);
         }
 
         /// <summary>
@@ -140,9 +138,10 @@ namespace MultiFarm
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
             // Invalidate all hub map assets so they're freshly loaded each save.
-            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameEast}");
-            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameNorth}");
-            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameSouth}");
+            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameFarm}");
+            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameBusStop}");
+            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameBackwoods}");
+            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameForest}");
             HubManager.RegisterLocations();
             FarmManager.LoadAssignments();
             FarmManager.EnsurePlayerFarmsExist();
@@ -200,18 +199,20 @@ namespace MultiFarm
             // fires and immediately redirect the player to the correct hub.
             if (e.Player.IsLocalPlayer)
             {
+                // Farm east edge → Farm Hub (west entrance, face right)
                 if (e.NewLocation?.Name == "BusStop" && e.OldLocation?.Name == "Farm")
                 {
-                    Game1.warpFarmer(FarmHubManager.HubNameEast,
-                        FarmHubManager.HubEastEntryFromBusStop.X,
-                        FarmHubManager.HubEastEntryFromBusStop.Y, 3);
+                    Game1.warpFarmer(FarmHubManager.HubNameFarm,
+                        FarmHubManager.HubFarmEntry.X,
+                        FarmHubManager.HubFarmEntry.Y, 1);
                     return;
                 }
+                // BusStop west edge → BusStop Hub (east entrance, face left)
                 if (e.NewLocation?.Name == "Farm" && e.OldLocation?.Name == "BusStop")
                 {
-                    Game1.warpFarmer(FarmHubManager.HubNameEast,
-                        FarmHubManager.HubEastEntryFromFarm.X,
-                        FarmHubManager.HubEastEntryFromFarm.Y, 1);
+                    Game1.warpFarmer(FarmHubManager.HubNameBusStop,
+                        FarmHubManager.HubBusStopEntry.X,
+                        FarmHubManager.HubBusStopEntry.Y, 3);
                     return;
                 }
             }

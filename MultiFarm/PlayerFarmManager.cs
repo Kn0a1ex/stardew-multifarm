@@ -366,16 +366,10 @@ namespace MultiFarm
 
                 var hubArrival = FarmHubManager.GetHubArrivalForSlot(slot);
 
-                // Top-edge return warps → East Hub (x=38-42, y=-1)
+                // Top-edge return warps → Farm Hub (x=38-42, y=-1)
                 for (int rx = 38; rx <= 42; rx++)
                     farmLoc.warps.Add(new Warp(rx, -1,
-                        FarmHubManager.HubNameEast, hubArrival.X, hubArrival.Y, false));
-
-                // South-edge warps → South Hub (towards Cindersap Forest)
-                var hubSouthEntry = FarmHubManager.HubSouthEntryFromEast;
-                for (int sx = typeData.southX - 2; sx <= typeData.southX + 2; sx++)
-                    farmLoc.warps.Add(new Warp(sx, typeData.mapH,
-                        FarmHubManager.HubNameSouth, hubSouthEntry.X, hubSouthEntry.Y, false));
+                        FarmHubManager.HubNameFarm, hubArrival.X, hubArrival.Y, false));
 
                 // Cave entrance warp
                 farmLoc.warps.Add(new Warp(
