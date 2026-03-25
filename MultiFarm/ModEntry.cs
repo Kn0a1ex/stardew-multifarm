@@ -41,6 +41,7 @@ namespace MultiFarm
             helper.Events.Player.Warped              += OnWarped;
             helper.Events.Multiplayer.PeerConnected  += OnPeerConnected;
             helper.Events.Multiplayer.ModMessageReceived += OnModMessageReceived;
+            helper.Events.Display.MenuChanged        += OnMenuChanged;
 
             // Console commands for debugging
             helper.ConsoleCommands.Add("mf_status",  "Show MultiFarm status.",                          CmdStatus);
@@ -156,6 +157,49 @@ namespace MultiFarm
         private void CmdSelectFarm(string cmd, string[] args)
         {
             FarmManager.ShowFarmSelectionMenu(Game1.player);
+        }
+
+        private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
+        {
+            if (!Context.IsWorldReady) return;
+            if (e.NewMenu is null) return;
+
+            // Redirect the carpenter / building-placement menu to use the player's own farm.
+            // This prevents players from accidentally (or intentionally) placing buildings
+            // on another player's farm by ensuring the menu targets their MultiFarm_Farm_N.
+            string menuTypeName = e.NewMenu.GetType().Name;
+            if (!menuTypeName.Contains("Carpenter") && !menuTypeName.Contains("BuildingPlacement"))
+                return;
+
+            int slot = FarmManager.GetSlotForPlayer(Game1.player.Name);
+            if (slot == 0) return;
+
+            var playerFarm = Game1.getLocationFromName(PlayerFarmManager.FarmName(slot)) as Farm;
+            if (playerFarm is null) return;
+
+            // The field name holding the target Farm varies by SDV version; try known names.
+            string[] fieldNames = { "buildingLocation", "TargetFarm", "farm", "_farm" };
+            foreach (var fieldName in fieldNames)
+            {
+                try
+                {
+                    var field = Helper.Reflection.GetField<Farm>(e.NewMenu, fieldName, required: false);
+                    if (field is not null)
+                    {
+                        field.SetValue(playerFarm);
+                        Monitor.Log(
+                            $"Redirected carpenter menu → {playerFarm.Name} (field '{fieldName}').",
+                            LogLevel.Debug);
+                        return;
+                    }
+                }
+                catch { /* try next name */ }
+            }
+
+            Monitor.Log(
+                "Could not find carpenter menu farm field — building restriction not applied. " +
+                "Check the field name for your SDV version.",
+                LogLevel.Warn);
         }
     }
 }

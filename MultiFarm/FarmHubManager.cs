@@ -39,8 +39,10 @@ namespace MultiFarm
         };
 
         // Where players arrive in the hub when coming from vanilla locations
-        private static readonly Point HubEntryFromFarm    = new( 2, 20);  // left side of hub
-        private static readonly Point HubEntryFromBusStop = new(57, 20);  // right side of hub
+        public static readonly Point HubEntryFromFarm      = new( 2, 20);  // from vanilla Farm (west)
+        public static readonly Point HubEntryFromBusStop   = new(57, 20);  // from BusStop (east)
+        public static readonly Point HubEntryFromBackwoods = new(30,  1);  // from Backwoods (north)
+        public static readonly Point HubEntryFromForest    = new(30, 38);  // from Forest (south)
 
         public bool IsRegistered { get; private set; }
 
@@ -90,16 +92,22 @@ namespace MultiFarm
             try
             {
                 // Farm → hub (east exit of farm, was Farm → BusStop)
-                var farm = Game1.getFarm();
-                PatchWarp(farm, targetLocation: "BusStop",
-                    newTarget: HubLocationName, newTargetX: HubEntryFromFarm.X, newTargetY: HubEntryFromFarm.Y);
+                PatchWarp(Game1.getFarm(), "BusStop",
+                    HubLocationName, HubEntryFromFarm.X, HubEntryFromFarm.Y);
 
                 // BusStop → hub (west exit of bus stop, was BusStop → Farm)
-                var busStop = Game1.getLocationFromName("BusStop");
-                PatchWarp(busStop, targetLocation: "Farm",
-                    newTarget: HubLocationName, newTargetX: HubEntryFromBusStop.X, newTargetY: HubEntryFromBusStop.Y);
+                PatchWarp(Game1.getLocationFromName("BusStop"), "Farm",
+                    HubLocationName, HubEntryFromBusStop.X, HubEntryFromBusStop.Y);
 
-                _monitor.Log("Patched vanilla Farm ↔ BusStop warps to route through hub.", LogLevel.Debug);
+                // Backwoods → hub north entry (was Backwoods → Farm)
+                PatchWarp(Game1.getLocationFromName("Backwoods"), "Farm",
+                    HubLocationName, HubEntryFromBackwoods.X, HubEntryFromBackwoods.Y);
+
+                // Forest → hub south entry (was Forest → Farm)
+                PatchWarp(Game1.getLocationFromName("Forest"), "Farm",
+                    HubLocationName, HubEntryFromForest.X, HubEntryFromForest.Y);
+
+                _monitor.Log("Patched vanilla warps: Farm/BusStop/Backwoods/Forest → hub.", LogLevel.Debug);
             }
             catch (Exception ex)
             {

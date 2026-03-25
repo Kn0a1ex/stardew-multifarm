@@ -232,21 +232,27 @@ def build_farmhub():
             set_tile(front, W-1-fx, H-1-fy, t)
 
     # Tree positions (x,y = top-left of 3×4 tree).
-    # Safe zone exclusions: portals ±4 tiles, path y=15-24, cliff walls x<5 or x>54
+    # Safe zone exclusions: portals ±4 tiles, E-W path band y=15-24, cliff walls x<5,
+    # and N-S connector path band (x=27-33 centre ±3).
     TREES = [
         # Upper half
-        (5,  3), (14, 3), (25, 3), (37, 3), (50, 3),
-        (5,  7), (26, 6), (37, 5), (50, 7),
-        (5, 12), (13,12), (27,13), (50,12),
+        (5,  3), (14, 3), (24, 3), (37, 3), (50, 3),
+        (5,  7), (23, 6), (37, 5), (50, 7),
+        (5, 12), (13,12), (24,13), (50,12),
         # Lower half
-        (5, 23), (25,24), (37,23), (50,24),
-        (5, 29), (15,29), (27,29), (50,29),
-        (5, 33), (25,33), (37,34), (50,33),
+        (5, 23), (24,24), (37,23), (50,24),
+        (5, 29), (15,29), (24,29), (50,29),
+        (5, 33), (24,33), (37,34), (50,33),
     ]
+    NS_CENTER = 30   # centre x of the N-S path
     for tx, ty in TREES:
-        # Skip if overlaps with path rows or portal exclusion zones
+        # Skip if touches E-W path band
         if PATH_Y1-3 <= ty+3 and ty <= PATH_Y2+3:
-            continue  # tree touches path band
+            continue
+        # Skip if centre (tx+1) is within 3 tiles of N-S path centre
+        if abs(tx+1 - NS_CENTER) < 3:
+            continue
+        # Skip if overlaps with a slot portal
         overlap = False
         for px, py in SLOT_POS:
             if abs(tx+1 - px) < 4 and abs(ty+1 - py) < 5:
@@ -257,6 +263,16 @@ def build_farmhub():
 
     # ── AlwaysFront layer (empty — no overhanging canopy needed) ────────────
     alwaysfront = make_grid(W, H, EMPTY)
+
+    # ── North-South connector path (x=29-31) ────────────────────────────────
+    # Connects north edge (→ Backwoods) through the E-W road to south edge (→ Forest).
+    # Overwriting cliff tiles at y=0-1 and y=38-39 creates the entrance openings.
+    NS_XS = range(29, 32)   # columns x=29, 30, 31
+    for py in range(0, H):
+        if PATH_Y1 <= py <= PATH_Y2:
+            continue        # already full-width E-W road
+        for px in NS_XS:
+            set_tile(back, px, py, ROAD)
 
     # --- Warp property string ---
     # Left exits → Farm
@@ -272,7 +288,12 @@ def build_farmhub():
         f"{px} {py} MultiFarm_Farm_{i+1} 40 5"
         for i, (px, py) in enumerate(SLOT_POS)
     )
-    warp_str = f"{farm_warps} {bus_warps} {slot_warps}"
+    # North exits → Backwoods (player arrives at Backwoods 14 38, stepping south)
+    north_warps = " ".join(f"{px} -1 Backwoods 14 38" for px in NS_XS)
+    # South exits → Forest (player arrives at Forest 68 1)
+    south_warps = " ".join(f"{px} {H} Forest 68 1" for px in NS_XS)
+
+    warp_str = f"{farm_warps} {bus_warps} {slot_warps} {north_warps} {south_warps}"
 
     tmx = f"""<?xml version="1.0"?>
 <map version="1.4" tiledversion="1.4.2" orientation="orthogonal" renderorder="right-down" compressionlevel="0" width="{W}" height="{H}" tilewidth="16" tileheight="16" infinite="0" nextlayerid="9" nextobjectid="1">
