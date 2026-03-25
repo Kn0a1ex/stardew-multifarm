@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
+using System;
 
 namespace MultiFarm
 {
@@ -38,6 +39,7 @@ namespace MultiFarm
 
             new Harmony(ModManifest.UniqueID).PatchAll();
 
+            helper.Events.Content.AssetRequested        += OnAssetRequested;
             helper.Events.GameLoop.GameLaunched         += OnGameLaunched;
             helper.Events.GameLoop.SaveLoaded           += OnSaveLoaded;
             helper.Events.GameLoop.DayStarted           += OnDayStarted;
@@ -55,10 +57,68 @@ namespace MultiFarm
             helper.ConsoleCommands.Add("mf_selectfarm", "Open farm-selection menu for local player.",   CmdSelectFarm);
         }
 
-        // ── Event handlers ───────────────────────────────────────────────────
-        // Hub map loading and vanilla warp redirects are handled by the
-        // [MultiFarm] Content CP pack (content.json). Only the Farm↔BusStop
-        // redirect lives here, via WarpInterceptPatch (Harmony prefix).
+        // ── Asset pipeline ────────────────────────────────────────────────────
+
+        private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
+        {
+            if (!Config.ReplaceVanillaWarps) return;
+
+            // Redirect vanilla map Warp properties so players route through the hubs.
+            // CP TextOperations can't replace multi-token warp groups, so this stays in C#.
+            // Hub location registration is handled by CP's CustomLocations block.
+            // Farm↔BusStop is intercepted by WarpInterceptPatch (Harmony prefix).
+
+            if (e.NameWithoutLocale.IsEquivalentTo("Maps/Backwoods"))
+                e.Edit(asset => RedirectMapWarps(asset, "Farm",
+                    FarmHubManager.HubNameBackwoods,
+                    FarmHubManager.HubBackwoodsEntryFromBackwoods.X,
+                    FarmHubManager.HubBackwoodsEntryFromBackwoods.Y), AssetEditPriority.Default);
+
+            if (e.NameWithoutLocale.IsEquivalentTo("Maps/Forest"))
+                e.Edit(asset => RedirectMapWarps(asset, "Farm",
+                    FarmHubManager.HubNameForest,
+                    FarmHubManager.HubForestEntryFromForest.X,
+                    FarmHubManager.HubForestEntryFromForest.Y), AssetEditPriority.Default);
+
+            if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm"))
+                e.Edit(asset =>
+                {
+                    RedirectMapWarps(asset, "Backwoods",
+                        FarmHubManager.HubNameBackwoods,
+                        FarmHubManager.HubBackwoodsEntryFromFarm.X,
+                        FarmHubManager.HubBackwoodsEntryFromFarm.Y);
+                    RedirectMapWarps(asset, "Forest",
+                        FarmHubManager.HubNameForest,
+                        FarmHubManager.HubForestEntryFromFarm.X,
+                        FarmHubManager.HubForestEntryFromFarm.Y);
+                }, AssetEditPriority.Default);
+        }
+
+        private static void RedirectMapWarps(IAssetData asset,
+            string fromTarget, string toTarget, int toX, int toY)
+        {
+            var map = asset.AsMap().Data;
+            if (!map.Properties.TryGetValue("Warp", out var warpProp)) return;
+
+            string[] tokens = warpProp.ToString()
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            var result = new System.Text.StringBuilder();
+            for (int i = 0; i + 5 <= tokens.Length; i += 5)
+            {
+                if (tokens[i + 2].Equals(fromTarget, StringComparison.OrdinalIgnoreCase))
+                {
+                    tokens[i + 2] = toTarget;
+                    tokens[i + 3] = toX.ToString();
+                    tokens[i + 4] = toY.ToString();
+                }
+                if (result.Length > 0) result.Append(' ');
+                result.Append(
+                    $"{tokens[i]} {tokens[i+1]} {tokens[i+2]} {tokens[i+3]} {tokens[i+4]}");
+            }
+
+            map.Properties["Warp"] = result.ToString();
+        }
 
         // ── Game loop ─────────────────────────────────────────────────────────
 

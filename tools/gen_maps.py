@@ -442,19 +442,19 @@ def build_interior_template(vanilla_name, output_name):
 if __name__ == "__main__":
     # All hubs are now 24×20 (default). Farm→BusStop walk ≈20 tiles.
     # Harmony patch intercepts Farm↔BusStop warps and redirects through Farm Hub.
-    build_hub("MultiFarm_Hub_Farm", exits={
+    build_hub("Custom_MultiFarm_Hub_Farm", exits={
         "east": ("BusStop", 11, 23),
     }, slot_pos=FARM_HUB_SLOTS, farm_arrival=(75, 15))
 
     # Backwoods Hub — vertical spine; slot connections on south wall (y=17).
     # Transit exit removed — slot 1's south-wall opening is the host's connection.
-    build_hub("MultiFarm_Hub_Backwoods", exits={
+    build_hub("Custom_MultiFarm_Hub_Backwoods", exits={
         "north": ("Backwoods", 14, 38),
     }, slot_pos=BACKWOODS_HUB_SLOTS, farm_arrival=(40, 5))
 
     # Forest Hub — vertical spine; slot connections on north wall (y=2).
     # Transit exit removed — slot 1's north-wall opening is the host's connection.
-    build_hub("MultiFarm_Hub_Forest", exits={
+    build_hub("Custom_MultiFarm_Hub_Forest", exits={
         "south": ("Forest", 68,  1),
     }, slot_pos=FOREST_HUB_SLOTS, farm_arrival=(40, 55))
 

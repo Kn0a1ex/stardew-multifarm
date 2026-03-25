@@ -3,68 +3,17 @@
 
   // ── Custom hub locations ──────────────────────────────────────────────────
   // CP registers these as real GameLocations in Game1.locations automatically.
-  // This replaces both the C# new GameLocation() calls and the Load actions.
+  // Names must use Custom_ prefix per CP requirements.
+  // Warp redirects (Backwoods/Forest/Farm) are handled by the C# mod's
+  // OnAssetRequested handler since CP TextOperations can't replace multi-token
+  // warp groups (e.g. "Farm 40 0" → "Custom_MultiFarm_Hub_Backwoods 11 2").
   "CustomLocations": [
-    { "Name": "MultiFarm_Hub_Farm",      "FromMapFile": "assets/maps/MultiFarm_Hub_Farm.tmx" },
-    { "Name": "MultiFarm_Hub_Backwoods", "FromMapFile": "assets/maps/MultiFarm_Hub_Backwoods.tmx" },
-    { "Name": "MultiFarm_Hub_Forest",    "FromMapFile": "assets/maps/MultiFarm_Hub_Forest.tmx" }
+    { "Name": "Custom_MultiFarm_Hub_Farm",      "FromMapFile": "assets/maps/Custom_MultiFarm_Hub_Farm.tmx" },
+    { "Name": "Custom_MultiFarm_Hub_Backwoods", "FromMapFile": "assets/maps/Custom_MultiFarm_Hub_Backwoods.tmx" },
+    { "Name": "Custom_MultiFarm_Hub_Forest",    "FromMapFile": "assets/maps/Custom_MultiFarm_Hub_Forest.tmx" }
   ],
 
   "Changes": [
-
-    // ── Warp redirects ────────────────────────────────────────────────────────
-    // These replace the vanilla Farm↔Backwoods and Farm↔Forest warp destinations
-    // so players pass through the hubs instead of going directly between maps.
-    // Farm↔BusStop is handled separately by a Harmony patch in the C# mod
-    // because it's hardcoded in SDV 1.6 and not stored in map Warp properties.
-
-    // Backwoods: redirect its Farm exit → Backwoods Hub north entrance
-    {
-      "Action": "EditMap",
-      "Target": "Maps/Backwoods",
-      "TextOperations": [
-        {
-          "Operation": "Replace",
-          "Target": [ "MapProperties", "Warp" ],
-          "Search": "Farm 40 0",
-          "Value": "MultiFarm_Hub_Backwoods 11 2"
-        }
-      ]
-    },
-
-    // Forest: redirect its Farm exit → Forest Hub south entrance
-    {
-      "Action": "EditMap",
-      "Target": "Maps/Forest",
-      "TextOperations": [
-        {
-          "Operation": "Replace",
-          "Target": [ "MapProperties", "Warp" ],
-          "Search": "Farm 41 64",
-          "Value": "MultiFarm_Hub_Forest 11 17"
-        }
-      ]
-    },
-
-    // Farm: redirect its Backwoods exit → Backwoods Hub; Forest exit → Forest Hub
-    {
-      "Action": "EditMap",
-      "Target": "Maps/Farm",
-      "TextOperations": [
-        {
-          "Operation": "Replace",
-          "Target": [ "MapProperties", "Warp" ],
-          "Search": "Backwoods 14 39",
-          "Value": "MultiFarm_Hub_Backwoods 2 17"
-        },
-        {
-          "Operation": "Replace",
-          "Target": [ "MapProperties", "Warp" ],
-          "Search": "Forest 68 0",
-          "Value": "MultiFarm_Hub_Forest 2 2"
-        }
-      ]
-    },
 
     // ── Farm type selector ────────────────────────────────────────────────────
     // Remove all non-Standard farm types from the new-game farm picker.

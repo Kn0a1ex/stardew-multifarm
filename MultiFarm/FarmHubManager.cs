@@ -22,9 +22,9 @@ namespace MultiFarm
     public class FarmHubManager
     {
         // ── Location names ────────────────────────────────────────────────────
-        public const string HubNameFarm      = "MultiFarm_Hub_Farm";
-        public const string HubNameBackwoods = "MultiFarm_Hub_Backwoods";
-        public const string HubNameForest    = "MultiFarm_Hub_Forest";
+        public const string HubNameFarm      = "Custom_MultiFarm_Hub_Farm";
+        public const string HubNameBackwoods = "Custom_MultiFarm_Hub_Backwoods";
+        public const string HubNameForest    = "Custom_MultiFarm_Hub_Forest";
 
         // ── Per-hub slot arrival positions (wall-edge style) ──────────────────
         // Farm Hub: west wall, x=2, y=3..17 spacing 2
