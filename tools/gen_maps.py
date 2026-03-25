@@ -93,7 +93,11 @@ def place_tree(g, x, y):
             set_tile(g, x+dx, y+dy, t)
 
 def csv_row(row): return ",".join(str(t) for t in row)
-def grid_to_csv(g): return "\n".join(csv_row(row) for row in g)
+def grid_to_csv(g):
+    # Vanilla Tiled format: trailing comma after each row except the last, bare \n at end.
+    # TMXTile splits on \n then parses each line; no trailing whitespace before </data>.
+    rows = [csv_row(row) for row in g]
+    return ",\n".join(rows) + "\n"
 
 # ---------------------------------------------------------------------------
 # Hub TMX generator (60 wide × 40 tall) — used for all three hub maps.
@@ -304,32 +308,27 @@ def build_hub(hub_name, north_warp, south_warp, west_warp=None, east_warp=None):
   <layer id="1" name="Back" width="{W}" height="{H}" opacity="1" offsetx="0" offsety="0">
     <properties />
     <data encoding="csv">
-{grid_to_csv(back)}
-    </data>
+{grid_to_csv(back)}</data>
   </layer>
   <layer id="2" name="Buildings" width="{W}" height="{H}" opacity="1" offsetx="0" offsety="0">
     <properties />
     <data encoding="csv">
-{grid_to_csv(buildings)}
-    </data>
+{grid_to_csv(buildings)}</data>
   </layer>
   <layer id="3" name="Paths" width="{W}" height="{H}" opacity="1" offsetx="0" offsety="0">
     <properties />
     <data encoding="csv">
-{grid_to_csv(paths)}
-    </data>
+{grid_to_csv(paths)}</data>
   </layer>
   <layer id="4" name="Front" width="{W}" height="{H}" opacity="1" offsetx="0" offsety="0">
     <properties />
     <data encoding="csv">
-{grid_to_csv(front)}
-    </data>
+{grid_to_csv(front)}</data>
   </layer>
   <layer id="5" name="AlwaysFront" width="{W}" height="{H}" opacity="1" offsetx="0" offsety="0">
     <properties />
     <data encoding="csv">
-{grid_to_csv(alwaysfront)}
-    </data>
+{grid_to_csv(alwaysfront)}</data>
   </layer>
   <objectgroup id="6" name="Back" visible="false" locked="false" />
   <objectgroup id="7" name="Buildings" visible="false" locked="false" />
