@@ -61,14 +61,21 @@ namespace MultiFarm
         /// </summary>
         public void RegisterLocations()
         {
+            // SDV wipes Game1.locations on every save load, so we must re-register each time.
+            // Check the live list rather than IsRegistered to avoid stale state.
+            if (Game1.getLocationFromName(HubLocationName) is not null)
+            {
+                IsRegistered = true;
+                return;
+            }
+
             try
             {
-                // Load the hub map from assets/maps/FarmHub.tmx
                 string mapPath = _helper.ModContent.GetInternalAssetName("assets/maps/FarmHub.tmx").Name;
                 var hubLocation = new GameLocation(mapPath, HubLocationName)
                 {
-                    IsOutdoors  = true,
-                    IsFarm      = false,
+                    IsOutdoors   = true,
+                    IsFarm       = false,
                     IsGreenhouse = false,
                 };
                 Game1.locations.Add(hubLocation);

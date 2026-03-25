@@ -65,18 +65,23 @@ namespace MultiFarm
 
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
+            // SDV clears Game1.locations on every save load — re-register before anything else.
+            HubManager.RegisterLocations();
             FarmManager.LoadAssignments();
             FarmManager.EnsurePlayerFarmsExist();
             HubManager.PatchVanillaWarps();
 
-            // If the local player has no slot yet, show the farm-selection menu
-            if (FarmManager.GetSlotForPlayer(Game1.player.Name) == 0)
+            // Only auto-prompt in multiplayer; single-player uses the vanilla farm system.
+            if (Context.IsMultiplayer && FarmManager.GetSlotForPlayer(Game1.player.Name) == 0)
                 FarmManager.ShowFarmSelectionMenu(Game1.player);
         }
 
         private void OnDayStarted(object? sender, DayStartedEventArgs e)
         {
+            // Re-register and re-patch defensively — map reloads can reset both.
+            HubManager.RegisterLocations();
             FarmManager.EnsurePlayerFarmsExist();
+            HubManager.PatchVanillaWarps();
 
             // Redirect married NPC home locations to the spouse's private farmhouse.
             // The schedule-string side is handled by NpcSchedulePatch (Harmony prefix).
@@ -111,6 +116,29 @@ namespace MultiFarm
 
         private void OnWarped(object? sender, WarpedEventArgs e)
         {
+            if (!Config.ReplaceVanillaWarps) return;
+
+            // In SDV 1.6, Farm↔BusStop warps are no longer stored in location.warps,
+            // so PatchVanillaWarps can't replace them. Intercept after the vanilla warp
+            // fires and immediately send the player to the hub instead.
+            if (e.Player.IsLocalPlayer)
+            {
+                if (e.NewLocation?.Name == "BusStop" && e.OldLocation?.Name == "Farm")
+                {
+                    Game1.warpFarmer(FarmHubManager.HubLocationName,
+                        FarmHubManager.HubEntryFromBusStop.X,
+                        FarmHubManager.HubEntryFromBusStop.Y, 3);
+                    return;
+                }
+                if (e.NewLocation?.Name == "Farm" && e.OldLocation?.Name == "BusStop")
+                {
+                    Game1.warpFarmer(FarmHubManager.HubLocationName,
+                        FarmHubManager.HubEntryFromFarm.X,
+                        FarmHubManager.HubEntryFromFarm.Y, 1);
+                    return;
+                }
+            }
+
             if (e.NewLocation?.Name == FarmHubManager.HubLocationName)
                 HubManager.OnPlayerEnterHub(e.Player);
         }
