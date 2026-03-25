@@ -69,24 +69,30 @@ def grid_to_csv(g):
     return ",\n".join(rows) + "\n"
 
 # ---------------------------------------------------------------------------
-# Per-hub portal slot positions
+# Per-hub slot arrival positions (wall-edge style)
+#
+# Each position is where the player lands INSIDE the hub when arriving from
+# their farm via an edge-of-screen transition.  The warp trigger is on the
+# hub's wall (one tile beyond these positions); the farm's opposing edge has
+# a matching warp that targets these coordinates.
+#
+# Farm Hub      (horiz spine): slots on west wall,  x=2,  y=3..17 (spacing 2)
+# Backwoods Hub (vert  spine): slots on south wall, y=21, x=4..39 (spacing 5)
+# Forest Hub    (vert  spine): slots on north wall, y=2,  x=4..39 (spacing 5)
 # ---------------------------------------------------------------------------
-# Farm Hub (horizontal spine): portals on west side at y=5, spacing 3
 FARM_HUB_SLOTS = [
-    ( 3, 5), ( 6, 5), ( 9, 5), (12, 5),
-    (15, 5), (18, 5), (21, 5), (24, 5),
+    (2,  3), (2,  5), (2,  7), (2,  9),
+    (2, 11), (2, 13), (2, 15), (2, 17),
 ]
 
-# Backwoods Hub (vertical spine): portals on south side at y=18, spacing 5
 BACKWOODS_HUB_SLOTS = [
-    ( 4, 18), ( 9, 18), (14, 18), (19, 18),
-    (24, 18), (29, 18), (34, 18), (39, 18),
+    ( 4, 21), ( 9, 21), (14, 21), (19, 21),
+    (24, 21), (29, 21), (34, 21), (39, 21),
 ]
 
-# Forest Hub (vertical spine): portals on north side at y=5, spacing 5
 FOREST_HUB_SLOTS = [
-    ( 4, 5), ( 9, 5), (14, 5), (19, 5),
-    (24, 5), (29, 5), (34, 5), (39, 5),
+    ( 4, 2), ( 9, 2), (14, 2), (19, 2),
+    (24, 2), (29, 2), (34, 2), (39, 2),
 ]
 
 HUB_W, HUB_H = 44, 24
@@ -137,33 +143,50 @@ def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5)):
     set_col(back, W-2, CLIFF, 2, H-2)
     set_col(back, W-1, DARK,  2, H-2)
 
-    # Main spine + portal connectors
+    # Detect which hub wall the farm slots connect to, from slot_pos geometry.
+    #   Farm Hub     → all slots share x=2  → "west"  wall
+    #   Backwoods Hub → all slots share large y (21) → "south" wall
+    #   Forest Hub   → all slots share small y (2)  → "north" wall
+    _sx = [px for px, py in slot_pos]
+    _sy = [py for px, py in slot_pos]
+    if len(set(_sx)) == 1:
+        _farm_wall = "west"
+    elif _sy[0] > H // 2:
+        _farm_wall = "south"
+    else:
+        _farm_wall = "north"
+
+    # Main spine
     if has_horiz:
-        # Farm Hub: horizontal spine y=9-11; vertical stems from portals down to spine
+        # Farm Hub: horizontal spine y=9-11
         for y in _PATH_YS:
             set_row(back, y, ROAD, 2, W-2)
-        for px, py in slot_pos:
-            for cy in range(py+2, _PATH_YS[0]):   # y=7,8 for portals at y=5
-                set_tile(back, px, cy, ROAD)
     else:
-        # Backwoods/Forest Hub: vertical spine x=20-22; horizontal branches from portals
+        # Backwoods/Forest Hub: vertical spine x=20-22
         for x in _PATH_XS:
             set_col(back, x, ROAD, 2, H-2)
-        for px, py in slot_pos:
-            if px < _PATH_XS[0]:                   # left of spine → branch east
-                for cx in range(px+2, _PATH_XS[0]):
-                    set_tile(back, cx, py, ROAD)
-            elif px > _PATH_XS[-1]:                # right of spine → branch west
-                for cx in range(_PATH_XS[-1]+1, px-1):
-                    set_tile(back, cx, py, ROAD)
 
-    # Portal patches (3×3 GRASS_C) — drawn after connectors
-    for px, py in slot_pos:
-        for dy in range(-1, 2):
-            for dx in range(-1, 2):
-                nx, ny = px+dx, py+dy
-                if 2 <= nx <= W-3 and 2 <= ny <= H-3:
-                    back[ny][nx] = GRASS_C
+    # Farm slot wall connections (edge-of-screen style):
+    #   • punch openings in the hub wall at each slot's position
+    #   • add a road along the wall edge connecting all openings to the spine
+    if _farm_wall == "west":
+        # Vertical road at x=2 from min to max slot y, connecting all openings
+        set_col(back, 2, ROAD, min(_sy), max(_sy) + 1)
+        for px, py in slot_pos:
+            back[py][0] = ROAD   # open west cliff
+            back[py][1] = ROAD
+    elif _farm_wall == "south":
+        # Horizontal road at slot-y (y=21), full interior width
+        set_row(back, _sy[0], ROAD, 2, W - 2)
+        for px, py in slot_pos:
+            back[H - 2][px] = ROAD   # open south cliff
+            back[H - 1][px] = ROAD
+    else:  # north
+        # Horizontal road at slot-y (y=2), full interior width
+        set_row(back, _sy[0], ROAD, 2, W - 2)
+        for px, py in slot_pos:
+            back[0][px] = ROAD   # open north cliff
+            back[1][px] = ROAD
 
     # Punch cliff border for every exit side
     for side in exits:
@@ -220,10 +243,23 @@ def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5)):
         name = "Farm" if i == 0 else f"MultiFarm_Farm_{i+1}"
         return f"{name} {farm_arrival[0]} {farm_arrival[1]}"
 
-    warp_parts.append(" ".join(
-        f"{px} {py} {_farm_dest(i)}"
-        for i, (px, py) in enumerate(slot_pos)
-    ))
+    # Warp triggers are on the hub WALL (one tile beyond the arrival position),
+    # giving edge-of-screen transitions when walking from a player farm into the hub.
+    if _farm_wall == "west":
+        warp_parts.append(" ".join(
+            f"-1 {py} {_farm_dest(i)}"
+            for i, (px, py) in enumerate(slot_pos)
+        ))
+    elif _farm_wall == "south":
+        warp_parts.append(" ".join(
+            f"{px} {H} {_farm_dest(i)}"
+            for i, (px, py) in enumerate(slot_pos)
+        ))
+    else:  # north
+        warp_parts.append(" ".join(
+            f"{px} -1 {_farm_dest(i)}"
+            for i, (px, py) in enumerate(slot_pos)
+        ))
     warp_str = " ".join(warp_parts)
 
     tmx = f"""<?xml version="1.0"?>
@@ -409,25 +445,25 @@ def build_interior_template(vanilla_name, output_name):
 
 if __name__ == "__main__":
     # Farm Hub — between vanilla Farm (west) and BusStop (east).
-    # Portals on west side (y=5, x=3–24) so players see them immediately on entry from Farm.
-    # Farm portals → placeholder farm arrival (75, 15); OnWarped redirects to east side of farm.
+    # Slot connections on west wall (x=2, y=3..17); no separate transit exit to Farm —
+    # slot 1 IS vanilla Farm, so the slot 1 west-wall opening is the host's connection.
+    # OnWarped intercepts Farm→BusStop and redirects to slot 1's arrival position.
     build_hub("MultiFarm_Hub_Farm", exits={
-        "west": ("Farm",    79, 17),
         "east": ("BusStop", 11, 23),
     }, slot_pos=FARM_HUB_SLOTS, farm_arrival=(75, 15))
 
-    # Backwoods Hub — vertical spine; portals on south side (y=18) so farms appear below.
-    # South exit: vanilla Farm mountain trail at (40, 5) — matches vanilla Backwoods→Farm warp.
+    # Backwoods Hub — vertical spine; slot connections on south wall (y=21).
+    # South transit exit to vanilla Farm remains for pass-through.
     build_hub("MultiFarm_Hub_Backwoods", exits={
         "north": ("Backwoods", 14, 38),
         "south": ("Farm",      40,  5),
     }, slot_pos=BACKWOODS_HUB_SLOTS, farm_arrival=(40, 5))
 
-    # Forest Hub — vertical spine; portals on north side (y=5) so farms appear above.
-    # North exit: vanilla Farm south edge at (68, 63) — matches vanilla Forest→Farm warp.
+    # Forest Hub — vertical spine; slot connections on north wall (y=2).
+    # North transit exit to vanilla Farm south path at (40, 63).
     build_hub("MultiFarm_Hub_Forest", exits={
         "south": ("Forest", 68,  1),
-        "north": ("Farm",   68, 63),
+        "north": ("Farm",   40, 63),
     }, slot_pos=FOREST_HUB_SLOTS, farm_arrival=(40, 55))
 
     for type_id in FARM_TYPE_SOURCES:
@@ -436,13 +472,13 @@ if __name__ == "__main__":
     build_interior_template("FarmCave.tmx",  "PlayerFarmCave.tmx")
     build_interior_template("FarmHouse.tmx", "PlayerFarmHouse.tmx")
 
-    print("\nPortal positions per hub:")
-    print("  Farm Hub (west side, y=5, spacing 3):")
+    print("\nSlot arrival positions per hub (wall-edge style):")
+    print("  Farm Hub (west wall, x=2, y=3..17 spacing 2):")
     for i, (x, y) in enumerate(FARM_HUB_SLOTS):
-        print(f"    Slot {i+1}: ({x},{y})  hub-arrival:({x},{y+2})")
-    print("  Backwoods Hub (south side, y=18, spacing 5):")
+        print(f"    Slot {i+1}: arrives at ({x},{y})  warp trigger:(-1,{y})")
+    print("  Backwoods Hub (south wall, y=21, x=4..39 spacing 5):")
     for i, (x, y) in enumerate(BACKWOODS_HUB_SLOTS):
-        print(f"    Slot {i+1}: ({x},{y})  hub-arrival:({x},{y+2})")
-    print("  Forest Hub (north side, y=5, spacing 5):")
+        print(f"    Slot {i+1}: arrives at ({x},{y})  warp trigger:({x},24)")
+    print("  Forest Hub (north wall, y=2, x=4..39 spacing 5):")
     for i, (x, y) in enumerate(FOREST_HUB_SLOTS):
-        print(f"    Slot {i+1}: ({x},{y})  hub-arrival:({x},{y+2})")
+        print(f"    Slot {i+1}: arrives at ({x},{y})  warp trigger:({x},-1)")

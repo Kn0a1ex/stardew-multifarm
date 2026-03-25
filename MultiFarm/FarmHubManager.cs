@@ -13,10 +13,10 @@ namespace MultiFarm
     ///   Backwoods Hub — Backwoods (north) / vanilla Farm mountain trail (south); portals south side
     ///   Forest Hub    — Forest (south) / vanilla Farm south edge (north); portals north side
     ///
-    /// Portal positions per hub (all hubs 44×24):
-    ///   Farm Hub      y=5,  x=3,6,9,12,15,18,21,24  hub-arrivals y=7
-    ///   Backwoods Hub y=18, x=4,9,14,19,24,29,34,39  hub-arrivals y=20
-    ///   Forest Hub    y=5,  x=4,9,14,19,24,29,34,39  hub-arrivals y=7
+    /// Slot arrival positions per hub (all hubs 44×24, wall-edge style):
+    ///   Farm Hub      x=2,  y=3,5,7,9,11,13,15,17   warp triggers at x=-1
+    ///   Backwoods Hub y=21, x=4,9,14,19,24,29,34,39  warp triggers at y=24
+    ///   Forest Hub    y=2,  x=4,9,14,19,24,29,34,39  warp triggers at y=-1
     ///
     /// Slot 1 = vanilla "Farm" (host farm). Slots 2-8 = MultiFarm_Farm_N.
     /// </summary>
@@ -27,46 +27,46 @@ namespace MultiFarm
         public const string HubNameBackwoods = "MultiFarm_Hub_Backwoods";
         public const string HubNameForest    = "MultiFarm_Hub_Forest";
 
-        // ── Per-hub portal positions ──────────────────────────────────────────
-        // Farm Hub: west side, y=5, spacing 3
+        // ── Per-hub slot arrival positions (wall-edge style) ──────────────────
+        // Farm Hub: west wall, x=2, y=3..17 spacing 2
         private static readonly Dictionary<int, Point> SlotWarpTilesFarm = new()
         {
-            { 1, new Point( 3, 5) }, { 2, new Point( 6, 5) },
-            { 3, new Point( 9, 5) }, { 4, new Point(12, 5) },
-            { 5, new Point(15, 5) }, { 6, new Point(18, 5) },
-            { 7, new Point(21, 5) }, { 8, new Point(24, 5) },
+            { 1, new Point(2,  3) }, { 2, new Point(2,  5) },
+            { 3, new Point(2,  7) }, { 4, new Point(2,  9) },
+            { 5, new Point(2, 11) }, { 6, new Point(2, 13) },
+            { 7, new Point(2, 15) }, { 8, new Point(2, 17) },
         };
 
-        // Backwoods Hub: south side, y=18, spacing 5
+        // Backwoods Hub: south wall, y=21, x=4..39 spacing 5
         private static readonly Dictionary<int, Point> SlotWarpTilesBackwoods = new()
         {
-            { 1, new Point( 4, 18) }, { 2, new Point( 9, 18) },
-            { 3, new Point(14, 18) }, { 4, new Point(19, 18) },
-            { 5, new Point(24, 18) }, { 6, new Point(29, 18) },
-            { 7, new Point(34, 18) }, { 8, new Point(39, 18) },
+            { 1, new Point( 4, 21) }, { 2, new Point( 9, 21) },
+            { 3, new Point(14, 21) }, { 4, new Point(19, 21) },
+            { 5, new Point(24, 21) }, { 6, new Point(29, 21) },
+            { 7, new Point(34, 21) }, { 8, new Point(39, 21) },
         };
 
-        // Forest Hub: north side, y=5, spacing 5
+        // Forest Hub: north wall, y=2, x=4..39 spacing 5
         private static readonly Dictionary<int, Point> SlotWarpTilesForest = new()
         {
-            { 1, new Point( 4, 5) }, { 2, new Point( 9, 5) },
-            { 3, new Point(14, 5) }, { 4, new Point(19, 5) },
-            { 5, new Point(24, 5) }, { 6, new Point(29, 5) },
-            { 7, new Point(34, 5) }, { 8, new Point(39, 5) },
+            { 1, new Point( 4, 2) }, { 2, new Point( 9, 2) },
+            { 3, new Point(14, 2) }, { 4, new Point(19, 2) },
+            { 5, new Point(24, 2) }, { 6, new Point(29, 2) },
+            { 7, new Point(34, 2) }, { 8, new Point(39, 2) },
         };
 
         // ── Hub entrance points ───────────────────────────────────────────────
-        // Farm Hub (horizontal spine y=9-11)
-        public static readonly Point HubFarmEntryFromFarm    = new( 2, 10);
+        // Farm Hub — from BusStop: east wall spine; from Farm (slot 1): west wall slot 1 pos
+        public static readonly Point HubFarmEntryFromFarm    = new( 2,  3);  // slot 1 west-wall pos
         public static readonly Point HubFarmEntryFromBusStop = new(41, 10);
 
-        // Backwoods Hub (vertical spine x=20-22)
+        // Backwoods Hub — from Backwoods: north spine; from Farm (slot 1): south wall slot 1 pos
         public static readonly Point HubBackwoodsEntryFromBackwoods = new(21,  2);
-        public static readonly Point HubBackwoodsEntryFromFarm      = new(21, 21);
+        public static readonly Point HubBackwoodsEntryFromFarm      = new( 4, 21);  // slot 1 south-wall pos
 
-        // Forest Hub (vertical spine x=20-22)
+        // Forest Hub — from Forest: south spine; from Farm (slot 1): north wall slot 1 pos
         public static readonly Point HubForestEntryFromForest = new(21, 21);
-        public static readonly Point HubForestEntryFromFarm   = new(21,  2);
+        public static readonly Point HubForestEntryFromFarm   = new( 4,  2);  // slot 1 north-wall pos
 
         public bool IsRegistered { get; private set; }
 
@@ -172,13 +172,10 @@ namespace MultiFarm
 
         /// <summary>
         /// Returns the hub tile where a player arriving from a player farm should land.
-        /// Lands 2 tiles past the portal so they don't immediately re-enter.
+        /// With wall-edge connections the slot position IS the arrival position.
         /// </summary>
         public static Point GetHubArrivalForSlot(int slot, string hubName)
-        {
-            var portal = GetSlotWarpTile(slot, hubName);
-            return new Point(portal.X, portal.Y + 2);
-        }
+            => GetSlotWarpTile(slot, hubName);
 
         // ── Helpers ──────────────────────────────────────────────────────────
 
