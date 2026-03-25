@@ -39,15 +39,16 @@ namespace MultiFarm
 
             new Harmony(ModManifest.UniqueID).PatchAll();
 
-            helper.Events.GameLoop.GameLaunched      += OnGameLaunched;
-            helper.Events.GameLoop.SaveLoaded        += OnSaveLoaded;
-            helper.Events.GameLoop.DayStarted        += OnDayStarted;
-            helper.Events.GameLoop.Saving            += OnSaving;
-            helper.Events.Player.Warped              += OnWarped;
-            helper.Events.Multiplayer.PeerConnected  += OnPeerConnected;
+            helper.Events.Content.AssetRequested        += OnAssetRequested;
+            helper.Events.GameLoop.GameLaunched         += OnGameLaunched;
+            helper.Events.GameLoop.SaveLoaded           += OnSaveLoaded;
+            helper.Events.GameLoop.DayStarted           += OnDayStarted;
+            helper.Events.GameLoop.Saving               += OnSaving;
+            helper.Events.Player.Warped                 += OnWarped;
+            helper.Events.Multiplayer.PeerConnected     += OnPeerConnected;
             helper.Events.Multiplayer.ModMessageReceived += OnModMessageReceived;
-            helper.Events.Display.MenuChanged        += OnMenuChanged;
-            helper.Events.Display.RenderedWorld      += OnRenderedWorld;
+            helper.Events.Display.MenuChanged           += OnMenuChanged;
+            helper.Events.Display.RenderedWorld         += OnRenderedWorld;
 
             // Console commands for debugging
             helper.ConsoleCommands.Add("mf_status",  "Show MultiFarm status.",                          CmdStatus);
@@ -58,6 +59,69 @@ namespace MultiFarm
 
         // ── Event handlers ───────────────────────────────────────────────────
 
+        // ── Asset pipeline ────────────────────────────────────────────────────
+
+        private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
+        {
+            // Serve the hub map through SMAPI's content pipeline.
+            // Using the Maps/ prefix means SDV fully initialises the location's
+            // map data, fixing the Ghost Warp bug (black screen / no arrival).
+            if (e.NameWithoutLocale.IsEquivalentTo($"Maps/{FarmHubManager.HubLocationName}"))
+            {
+                e.LoadFromModFile<xTile.Map>("assets/maps/FarmHub.tmx", AssetLoadPriority.Medium);
+                return;
+            }
+
+            if (!Config.ReplaceVanillaWarps) return;
+
+            // Patch vanilla map Warp properties at asset-load time so they survive
+            // map reloads (unlike runtime PatchVanillaWarps which runs only once).
+            if (e.NameWithoutLocale.IsEquivalentTo("Maps/Backwoods"))
+                e.Edit(asset => RedirectMapWarps(asset, "Farm",
+                    FarmHubManager.HubLocationName,
+                    FarmHubManager.HubEntryFromBackwoods.X,
+                    FarmHubManager.HubEntryFromBackwoods.Y), AssetEditPriority.Default);
+
+            if (e.NameWithoutLocale.IsEquivalentTo("Maps/Forest"))
+                e.Edit(asset => RedirectMapWarps(asset, "Farm",
+                    FarmHubManager.HubLocationName,
+                    FarmHubManager.HubEntryFromForest.X,
+                    FarmHubManager.HubEntryFromForest.Y), AssetEditPriority.Default);
+        }
+
+        /// <summary>
+        /// Edit a map's Warp property, replacing every warp that targets
+        /// <paramref name="fromTarget"/> with one that targets <paramref name="toTarget"/>.
+        /// Warp format: space-separated 5-token groups — srcX srcY TargetMap targetX targetY.
+        /// </summary>
+        private static void RedirectMapWarps(IAssetData asset,
+            string fromTarget, string toTarget, int toX, int toY)
+        {
+            var map = asset.AsMap().Data;
+            if (!map.Properties.TryGetValue("Warp", out var warpProp)) return;
+
+            string[] tokens = warpProp.ToString()
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            var result = new System.Text.StringBuilder();
+            for (int i = 0; i + 5 <= tokens.Length; i += 5)
+            {
+                if (tokens[i + 2].Equals(fromTarget, StringComparison.OrdinalIgnoreCase))
+                {
+                    tokens[i + 2] = toTarget;
+                    tokens[i + 3] = toX.ToString();
+                    tokens[i + 4] = toY.ToString();
+                }
+                if (result.Length > 0) result.Append(' ');
+                result.Append(
+                    $"{tokens[i]} {tokens[i+1]} {tokens[i+2]} {tokens[i+3]} {tokens[i+4]}");
+            }
+
+            map.Properties["Warp"] = result.ToString();
+        }
+
+        // ── Game loop ─────────────────────────────────────────────────────────
+
         private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
         {
             HubManager.RegisterLocations();
@@ -65,7 +129,9 @@ namespace MultiFarm
 
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
-            // SDV clears Game1.locations on every save load — re-register before anything else.
+            // Invalidate the hub map asset so it's freshly loaded through the
+            // content pipeline each time a save loads (avoids stale cached map data).
+            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubLocationName}");
             HubManager.RegisterLocations();
             FarmManager.LoadAssignments();
             FarmManager.EnsurePlayerFarmsExist();

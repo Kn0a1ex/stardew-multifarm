@@ -71,7 +71,10 @@ namespace MultiFarm
 
             try
             {
-                string mapPath = _helper.ModContent.GetInternalAssetName("assets/maps/FarmHub.tmx").Name;
+                // Use the Maps/ prefix so SDV loads the map through SMAPI's content
+                // pipeline (served by OnAssetRequested). This ensures the location is
+                // fully initialised and warps to it don't Ghost Warp.
+                string mapPath = $"Maps/{HubLocationName}";
                 var hubLocation = new GameLocation(mapPath, HubLocationName)
                 {
                     IsOutdoors   = true,
