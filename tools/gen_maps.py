@@ -93,7 +93,7 @@ def place_tree(g, x, y):
             set_tile(g, x+dx, y+dy, t)
 
 def csv_row(row): return ",".join(str(t) for t in row)
-def grid_to_csv(g): return "\n".join(csv_row(row)+"," for row in g)
+def grid_to_csv(g): return "\n".join(csv_row(row) for row in g)
 
 # ---------------------------------------------------------------------------
 # Hub TMX generator (60 wide × 40 tall) — used for all three hub maps.
