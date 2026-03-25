@@ -1,7 +1,6 @@
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewValley;
-using System;
 using System.Collections.Generic;
 
 namespace MultiFarm
@@ -80,44 +79,20 @@ namespace MultiFarm
             _monitor = monitor;
         }
 
+        /// <summary>
+        /// Updates IsRegistered by checking whether the CP pack has added all three
+        /// hub locations to Game1.locations. Registration itself is handled by the
+        /// [MultiFarm] Content CP pack via its CustomLocations block.
+        /// </summary>
         public void RegisterLocations()
         {
-            bool allPresent =
-                Game1.getLocationFromName(HubNameFarm)      is not null &&
-                Game1.getLocationFromName(HubNameBackwoods) is not null &&
-                Game1.getLocationFromName(HubNameForest)    is not null;
-
-            if (allPresent) { IsRegistered = true; return; }
-
-            foreach (var (name, _) in new[]
-            {
-                (HubNameFarm,      ""),
-                (HubNameBackwoods, ""),
-                (HubNameForest,    ""),
-            })
-            {
-                if (Game1.getLocationFromName(name) is not null) continue;
-                try
-                {
-                    var loc = new GameLocation($"Maps/{name}", name)
-                    {
-                        IsOutdoors   = true,
-                        IsFarm       = false,
-                        IsGreenhouse = false,
-                    };
-                    Game1.locations.Add(loc);
-                    _monitor.Log($"Registered hub location '{name}'.", LogLevel.Debug);
-                }
-                catch (Exception ex)
-                {
-                    _monitor.Log($"Failed to register hub '{name}': {ex.Message}", LogLevel.Error);
-                }
-            }
-
             IsRegistered =
                 Game1.getLocationFromName(HubNameFarm)      is not null &&
                 Game1.getLocationFromName(HubNameBackwoods) is not null &&
                 Game1.getLocationFromName(HubNameForest)    is not null;
+
+            if (!IsRegistered)
+                _monitor.Log("Hub locations not yet registered by CP pack — will retry.", LogLevel.Trace);
         }
 
         public void OnPlayerEnterHub(Farmer player, string hubName)

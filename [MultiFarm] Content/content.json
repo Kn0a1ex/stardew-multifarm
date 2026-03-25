@@ -1,25 +1,16 @@
 {
-  "Format": "2.0.0",
-  "Changes": [
+  "Format": "2.9.0",
 
-    // ── Hub map loading ───────────────────────────────────────────────────────
-    // Serve the three hub maps through the CP asset pipeline.
-    // The C# mod registers the GameLocations; CP provides the map data.
-    {
-      "Action": "Load",
-      "Target": "Maps/MultiFarm_Hub_Farm",
-      "FromFile": "assets/maps/MultiFarm_Hub_Farm.tmx"
-    },
-    {
-      "Action": "Load",
-      "Target": "Maps/MultiFarm_Hub_Backwoods",
-      "FromFile": "assets/maps/MultiFarm_Hub_Backwoods.tmx"
-    },
-    {
-      "Action": "Load",
-      "Target": "Maps/MultiFarm_Hub_Forest",
-      "FromFile": "assets/maps/MultiFarm_Hub_Forest.tmx"
-    },
+  // ── Custom hub locations ──────────────────────────────────────────────────
+  // CP registers these as real GameLocations in Game1.locations automatically.
+  // This replaces both the C# new GameLocation() calls and the Load actions.
+  "CustomLocations": [
+    { "Name": "MultiFarm_Hub_Farm",      "FromMapFile": "assets/maps/MultiFarm_Hub_Farm.tmx" },
+    { "Name": "MultiFarm_Hub_Backwoods", "FromMapFile": "assets/maps/MultiFarm_Hub_Backwoods.tmx" },
+    { "Name": "MultiFarm_Hub_Forest",    "FromMapFile": "assets/maps/MultiFarm_Hub_Forest.tmx" }
+  ],
+
+  "Changes": [
 
     // ── Warp redirects ────────────────────────────────────────────────────────
     // These replace the vanilla Farm↔Backwoods and Farm↔Forest warp destinations
