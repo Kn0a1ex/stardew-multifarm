@@ -7,24 +7,30 @@ using System.Collections.Generic;
 namespace MultiFarm
 {
     /// <summary>
-    /// Manages the Farm Hub location — a shared outdoor area inserted between
-    /// the vanilla Farm and BusStop (FarmHub.tmx, 60×40).
+    /// Manages the three shared Farm Hub locations that connect vanilla areas to
+    /// player-private farms (each hub is 60×40 tiles).
     ///
-    /// Map layout:
-    ///   [Farm] ←─── E-W path (y=17-22) ───→ [BusStop]
+    ///   East Hub  ←── Farm (west)    East Hub ──→ BusStop (east)
+    ///   East Hub  ↕  North Hub  ←── Backwoods (north)
+    ///   East Hub  ↕  South Hub  ──→ Forest (south)
     ///
-    ///   Upper portals (y=8):  Slot1(8,8)  Slot2(20,8)  Slot3(32,8)  Slot4(44,8)
-    ///   Lower portals (y=28): Slot5(8,28) Slot6(20,28) Slot7(32,28) Slot8(44,28)
+    ///   All hubs share the same 8 portal slot positions:
+    ///     Upper row (y=8):  Slot1(8,8)  Slot2(20,8)  Slot3(32,8)  Slot4(44,8)
+    ///     Lower row (y=28): Slot5(8,28) Slot6(20,28) Slot7(32,28) Slot8(44,28)
     ///
-    /// Vanilla warp patches (applied after each save load):
-    ///   Farm  → BusStop  redirected to  Hub at (2, 20)
-    ///   BusStop → Farm   redirected to  Hub at (57, 20)
+    ///   Farm exits: top edge → East Hub; south edge → South Hub.
     /// </summary>
     public class FarmHubManager
     {
-        public const string HubLocationName = "MultiFarm_Hub";
+        // ── Location names ────────────────────────────────────────────────────
+        public const string HubNameEast  = "MultiFarm_Hub_East";
+        public const string HubNameNorth = "MultiFarm_Hub_North";
+        public const string HubNameSouth = "MultiFarm_Hub_South";
 
-        // Portal tile positions on the hub map — must match FarmHub.tmx Warp entries.
+        /// <summary>Alias for East Hub — used in code that needs "the main hub".</summary>
+        public const string HubLocationName = HubNameEast;
+
+        // ── Portal positions (identical in all 3 hubs) ────────────────────────
         // Players arriving from a player farm land at (portal.X, portal.Y + 2).
         private static readonly Dictionary<int, Point> SlotWarpTiles = new()
         {
@@ -38,11 +44,25 @@ namespace MultiFarm
             { 8, new Point(44, 28) },
         };
 
-        // Where players arrive in the hub when coming from vanilla locations
-        public static readonly Point HubEntryFromFarm      = new( 2, 20);  // from vanilla Farm (west)
-        public static readonly Point HubEntryFromBusStop   = new(57, 20);  // from BusStop (east)
-        public static readonly Point HubEntryFromBackwoods = new(30,  1);  // from Backwoods (north)
-        public static readonly Point HubEntryFromForest    = new(30, 38);  // from Forest (south)
+        // ── East Hub entry points ─────────────────────────────────────────────
+        public static readonly Point HubEastEntryFromFarm      = new( 2, 20);  // from Farm (west)
+        public static readonly Point HubEastEntryFromBusStop   = new(57, 20);  // from BusStop (east)
+        public static readonly Point HubEastEntryFromNorth     = new(30,  2);  // from North Hub
+        public static readonly Point HubEastEntryFromSouth     = new(30, 37);  // from South Hub
+
+        // ── North Hub entry points ────────────────────────────────────────────
+        public static readonly Point HubNorthEntryFromBackwoods = new(30,  2);  // from Backwoods
+        public static readonly Point HubNorthEntryFromEast      = new(30, 37);  // from East Hub
+
+        // ── South Hub entry points ────────────────────────────────────────────
+        public static readonly Point HubSouthEntryFromEast      = new(30,  2);  // from East Hub
+        public static readonly Point HubSouthEntryFromForest    = new(30, 37);  // from Forest
+
+        // ── Backward-compat aliases (used elsewhere in the mod) ───────────────
+        public static readonly Point HubEntryFromFarm      = HubEastEntryFromFarm;
+        public static readonly Point HubEntryFromBusStop   = HubEastEntryFromBusStop;
+        public static readonly Point HubEntryFromBackwoods = HubNorthEntryFromBackwoods;
+        public static readonly Point HubEntryFromForest    = HubSouthEntryFromForest;
 
         public bool IsRegistered { get; private set; }
 
@@ -56,44 +76,57 @@ namespace MultiFarm
         }
 
         /// <summary>
-        /// Inject the hub GameLocation into the world on game launch.
-        /// Called before any save is loaded so the location exists when saves reference it.
+        /// Inject all three hub GameLocations into the world.
+        /// SDV wipes Game1.locations on every save load so this must be called after each load.
         /// </summary>
         public void RegisterLocations()
         {
-            // SDV wipes Game1.locations on every save load, so we must re-register each time.
-            // Check the live list rather than IsRegistered to avoid stale state.
-            if (Game1.getLocationFromName(HubLocationName) is not null)
+            bool allPresent =
+                Game1.getLocationFromName(HubNameEast)  is not null &&
+                Game1.getLocationFromName(HubNameNorth) is not null &&
+                Game1.getLocationFromName(HubNameSouth) is not null;
+
+            if (allPresent)
             {
                 IsRegistered = true;
                 return;
             }
 
-            try
+            foreach (var (name, mapFile) in new[]
             {
-                // Use the Maps/ prefix so SDV loads the map through SMAPI's content
-                // pipeline (served by OnAssetRequested). This ensures the location is
-                // fully initialised and warps to it don't Ghost Warp.
-                string mapPath = $"Maps/{HubLocationName}";
-                var hubLocation = new GameLocation(mapPath, HubLocationName)
+                (HubNameEast,  $"Maps/{HubNameEast}"),
+                (HubNameNorth, $"Maps/{HubNameNorth}"),
+                (HubNameSouth, $"Maps/{HubNameSouth}"),
+            })
+            {
+                if (Game1.getLocationFromName(name) is not null) continue;
+                try
                 {
-                    IsOutdoors   = true,
-                    IsFarm       = false,
-                    IsGreenhouse = false,
-                };
-                Game1.locations.Add(hubLocation);
+                    var loc = new GameLocation(mapFile, name)
+                    {
+                        IsOutdoors   = true,
+                        IsFarm       = false,
+                        IsGreenhouse = false,
+                    };
+                    Game1.locations.Add(loc);
+                    _monitor.Log($"Registered hub location '{name}'.", LogLevel.Debug);
+                }
+                catch (Exception ex)
+                {
+                    _monitor.Log($"Failed to register hub location '{name}': {ex.Message}", LogLevel.Error);
+                }
+            }
 
-                IsRegistered = true;
-                _monitor.Log($"Registered hub location '{HubLocationName}'.", LogLevel.Debug);
-            }
-            catch (Exception ex)
-            {
-                _monitor.Log($"Failed to register hub location: {ex.Message}", LogLevel.Error);
-            }
+            IsRegistered =
+                Game1.getLocationFromName(HubNameEast)  is not null &&
+                Game1.getLocationFromName(HubNameNorth) is not null &&
+                Game1.getLocationFromName(HubNameSouth) is not null;
         }
 
         /// <summary>
-        /// After a save loads, redirect the vanilla Farm ↔ BusStop warps through the hub.
+        /// After a save loads, redirect vanilla warps through the appropriate hub.
+        /// Farm/BusStop are handled via OnWarped (SDV 1.6 no longer stores them in location.warps).
+        /// Backwoods/Forest are patched here as a runtime fallback; AssetRequested handles reloads.
         /// </summary>
         public void PatchVanillaWarps()
         {
@@ -101,23 +134,15 @@ namespace MultiFarm
 
             try
             {
-                // Farm → hub (east exit of farm, was Farm → BusStop)
-                PatchWarp(Game1.getFarm(), "BusStop",
-                    HubLocationName, HubEntryFromFarm.X, HubEntryFromFarm.Y);
-
-                // BusStop → hub (west exit of bus stop, was BusStop → Farm)
-                PatchWarp(Game1.getLocationFromName("BusStop"), "Farm",
-                    HubLocationName, HubEntryFromBusStop.X, HubEntryFromBusStop.Y);
-
-                // Backwoods → hub north entry (was Backwoods → Farm)
+                // Backwoods → North Hub (was Backwoods → Farm)
                 PatchWarp(Game1.getLocationFromName("Backwoods"), "Farm",
-                    HubLocationName, HubEntryFromBackwoods.X, HubEntryFromBackwoods.Y);
+                    HubNameNorth, HubNorthEntryFromBackwoods.X, HubNorthEntryFromBackwoods.Y);
 
-                // Forest → hub south entry (was Forest → Farm)
+                // Forest → South Hub (was Forest → Farm)
                 PatchWarp(Game1.getLocationFromName("Forest"), "Farm",
-                    HubLocationName, HubEntryFromForest.X, HubEntryFromForest.Y);
+                    HubNameSouth, HubSouthEntryFromForest.X, HubSouthEntryFromForest.Y);
 
-                _monitor.Log("Patched vanilla warps: Farm/BusStop/Backwoods/Forest → hub.", LogLevel.Debug);
+                _monitor.Log("Patched vanilla warps: Backwoods → NorthHub, Forest → SouthHub.", LogLevel.Debug);
             }
             catch (Exception ex)
             {
@@ -125,16 +150,19 @@ namespace MultiFarm
             }
         }
 
-        /// <summary>Called when a player steps into the hub. Could show path labels, etc.</summary>
-        public void OnPlayerEnterHub(Farmer player)
+        /// <summary>Called when a player steps into any hub location.</summary>
+        public void OnPlayerEnterHub(Farmer player, string hubName)
         {
             int slot = ModEntry.Instance.FarmManager.GetSlotForPlayer(player.Name);
             if (slot > 0)
             {
-                // Future: highlight the tile path to this player's farm
-                _monitor.Log($"{player.Name} entered the hub (assigned slot {slot}).", LogLevel.Trace);
+                _monitor.Log($"{player.Name} entered {hubName} (assigned slot {slot}).", LogLevel.Trace);
             }
         }
+
+        /// <summary>Returns true if the given location name is one of the three hub locations.</summary>
+        public static bool IsHubLocation(string? name) =>
+            name == HubNameEast || name == HubNameNorth || name == HubNameSouth;
 
         // ── Helpers ──────────────────────────────────────────────────────────
 

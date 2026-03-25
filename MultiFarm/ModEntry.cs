@@ -63,12 +63,22 @@ namespace MultiFarm
 
         private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
         {
-            // Serve the hub map through SMAPI's content pipeline.
-            // Using the Maps/ prefix means SDV fully initialises the location's
-            // map data, fixing the Ghost Warp bug (black screen / no arrival).
-            if (e.NameWithoutLocale.IsEquivalentTo($"Maps/{FarmHubManager.HubLocationName}"))
+            // Serve all three hub maps through SMAPI's content pipeline.
+            // The Maps/ prefix ensures SDV fully initialises the location,
+            // fixing the Ghost Warp bug (black screen / no arrival).
+            if (e.NameWithoutLocale.IsEquivalentTo($"Maps/{FarmHubManager.HubNameEast}"))
             {
-                e.LoadFromModFile<xTile.Map>("assets/maps/FarmHub.tmx", AssetLoadPriority.Medium);
+                e.LoadFromModFile<xTile.Map>($"assets/maps/{FarmHubManager.HubNameEast}.tmx", AssetLoadPriority.Medium);
+                return;
+            }
+            if (e.NameWithoutLocale.IsEquivalentTo($"Maps/{FarmHubManager.HubNameNorth}"))
+            {
+                e.LoadFromModFile<xTile.Map>($"assets/maps/{FarmHubManager.HubNameNorth}.tmx", AssetLoadPriority.Medium);
+                return;
+            }
+            if (e.NameWithoutLocale.IsEquivalentTo($"Maps/{FarmHubManager.HubNameSouth}"))
+            {
+                e.LoadFromModFile<xTile.Map>($"assets/maps/{FarmHubManager.HubNameSouth}.tmx", AssetLoadPriority.Medium);
                 return;
             }
 
@@ -78,15 +88,15 @@ namespace MultiFarm
             // map reloads (unlike runtime PatchVanillaWarps which runs only once).
             if (e.NameWithoutLocale.IsEquivalentTo("Maps/Backwoods"))
                 e.Edit(asset => RedirectMapWarps(asset, "Farm",
-                    FarmHubManager.HubLocationName,
-                    FarmHubManager.HubEntryFromBackwoods.X,
-                    FarmHubManager.HubEntryFromBackwoods.Y), AssetEditPriority.Default);
+                    FarmHubManager.HubNameNorth,
+                    FarmHubManager.HubNorthEntryFromBackwoods.X,
+                    FarmHubManager.HubNorthEntryFromBackwoods.Y), AssetEditPriority.Default);
 
             if (e.NameWithoutLocale.IsEquivalentTo("Maps/Forest"))
                 e.Edit(asset => RedirectMapWarps(asset, "Farm",
-                    FarmHubManager.HubLocationName,
-                    FarmHubManager.HubEntryFromForest.X,
-                    FarmHubManager.HubEntryFromForest.Y), AssetEditPriority.Default);
+                    FarmHubManager.HubNameSouth,
+                    FarmHubManager.HubSouthEntryFromForest.X,
+                    FarmHubManager.HubSouthEntryFromForest.Y), AssetEditPriority.Default);
         }
 
         /// <summary>
@@ -129,9 +139,10 @@ namespace MultiFarm
 
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
-            // Invalidate the hub map asset so it's freshly loaded through the
-            // content pipeline each time a save loads (avoids stale cached map data).
-            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubLocationName}");
+            // Invalidate all hub map assets so they're freshly loaded each save.
+            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameEast}");
+            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameNorth}");
+            Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameSouth}");
             HubManager.RegisterLocations();
             FarmManager.LoadAssignments();
             FarmManager.EnsurePlayerFarmsExist();
@@ -186,34 +197,34 @@ namespace MultiFarm
 
             // In SDV 1.6, Farm↔BusStop warps are no longer stored in location.warps,
             // so PatchVanillaWarps can't replace them. Intercept after the vanilla warp
-            // fires and immediately send the player to the hub instead.
+            // fires and immediately redirect the player to the correct hub.
             if (e.Player.IsLocalPlayer)
             {
                 if (e.NewLocation?.Name == "BusStop" && e.OldLocation?.Name == "Farm")
                 {
-                    Game1.warpFarmer(FarmHubManager.HubLocationName,
-                        FarmHubManager.HubEntryFromBusStop.X,
-                        FarmHubManager.HubEntryFromBusStop.Y, 3);
+                    Game1.warpFarmer(FarmHubManager.HubNameEast,
+                        FarmHubManager.HubEastEntryFromBusStop.X,
+                        FarmHubManager.HubEastEntryFromBusStop.Y, 3);
                     return;
                 }
                 if (e.NewLocation?.Name == "Farm" && e.OldLocation?.Name == "BusStop")
                 {
-                    Game1.warpFarmer(FarmHubManager.HubLocationName,
-                        FarmHubManager.HubEntryFromFarm.X,
-                        FarmHubManager.HubEntryFromFarm.Y, 1);
+                    Game1.warpFarmer(FarmHubManager.HubNameEast,
+                        FarmHubManager.HubEastEntryFromFarm.X,
+                        FarmHubManager.HubEastEntryFromFarm.Y, 1);
                     return;
                 }
             }
 
-            if (e.NewLocation?.Name == FarmHubManager.HubLocationName)
-                HubManager.OnPlayerEnterHub(e.Player);
+            if (FarmHubManager.IsHubLocation(e.NewLocation?.Name))
+                HubManager.OnPlayerEnterHub(e.Player, e.NewLocation!.Name);
         }
 
         private void OnRenderedWorld(object? sender, RenderedWorldEventArgs e)
         {
-            // Draw player names above their portal tiles when inside the hub.
+            // Draw player names above their portal tiles when inside any hub.
             if (!Context.IsWorldReady) return;
-            if (Game1.currentLocation?.Name != FarmHubManager.HubLocationName) return;
+            if (!FarmHubManager.IsHubLocation(Game1.currentLocation?.Name)) return;
 
             SpriteBatch b = e.SpriteBatch;
             foreach (var (slot, name) in FarmManager.GetAssignments())

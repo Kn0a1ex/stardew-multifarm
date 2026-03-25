@@ -1,47 +1,27 @@
 #!/usr/bin/env python3
 """
-Generate FarmHub.tmx and PlayerFarm.tmx for the MultiFarm mod.
+Generate hub and player farm TMX maps for the MultiFarm mod.
 
-All tile GIDs use firstgid=16 for spring_outdoorsTileSheet (same as Backwoods.tmx).
-GID = sheet_tile_index + 16.
+Three hub maps, each 60×40:
+  MultiFarm_Hub_East   — between Farm (west) and BusStop (east); N/S exits to North/South hubs
+  MultiFarm_Hub_North  — between Backwoods (north) and East Hub (south)
+  MultiFarm_Hub_South  — between East Hub (north) and Forest (south)
 
-Verified tile references (confirmed from vanilla map tile data):
-  367 (sheet 351) = dark fill outside cliff
-  396 (sheet 380) = solid cliff / rock fill
-  373 (sheet 357) = cliff-to-grass left edge transition
-  421 (sheet 405) = grass inner (near cliff edge)
-  422 (sheet 406) = grass B
-  423 (sheet 407) = grass C  — used as portal patch marker
-  191 (sheet 175) = main open grass
-  166 (sheet 150) = spawnable grass
-  316 (sheet 300) = dark grass / shadow near cliff
-  320 (sheet 304) = dark grass variant
-  169 (sheet 153) = dirt road main tile   (BusStop y=23 row at sheet 153)
-  392 (sheet 376) = road north edge / cliff corner (BusStop y=21, sheet 376)
-  342 (sheet 326) = road south edge      (BusStop y=25, sheet 326)
-  370 (sheet 354) = rock bottom-left
-  371 (sheet 355) = rock bottom-center
-  372 (sheet 356) = rock bottom-right
-
-Front layer (same firstgid=16 outdoor sheet):
-  Cliff face tiles (top-left corner diagonal, from Backwoods):
-    962(946), 956(940), 957(941), 982(966), 1008(992), 981(965)
-  Tree tiles (3-wide × 4-tall):
-    Row 0: 26(10), 27(11), 28(12)
-    Row 1: 51(35), 52(36), 53(37)
-    Row 2: 76(60), 77(61), 78(62)
-    Row 3: 101(85), 102(86), 103(87)
-  Small shrub (2-wide):
-    Top: 104(88), 105(89)  — single-row shrub or tree top
-
-Portal slot positions:
+Each hub contains all 8 player portal slots at the same positions:
   Slots 1-4: y=8,  x = 8, 20, 32, 44
   Slots 5-8: y=28, x = 8, 20, 32, 44
 
-Warp connections:
-  Left  (x=-1, y=17-22) -> Farm 79 17
-  Right (x=60, y=17-22) -> BusStop 11 23
-  Slot portals (px,py)  -> MultiFarm_Farm_N at (40, 5)
+Hub entry coordinates (used in FarmHubManager.cs):
+  East Hub from Farm/west:      ( 2, 20)
+  East Hub from BusStop/east:   (57, 20)
+  East Hub from North Hub:      (30,  2)
+  East Hub from South Hub:      (30, 37)
+  North Hub from Backwoods:     (30,  2)
+  North Hub from East Hub:      (30, 37)
+  South Hub from East Hub:      (30,  2)
+  South Hub from Forest:        (30, 37)
+
+All tile GIDs use firstgid=16 for spring_outdoorsTileSheet (same as Backwoods.tmx).
 """
 
 import os, random
@@ -116,15 +96,29 @@ def csv_row(row): return ",".join(str(t) for t in row)
 def grid_to_csv(g): return "\n".join(csv_row(row)+"," for row in g)
 
 # ---------------------------------------------------------------------------
-# FarmHub.tmx  (60 wide × 40 tall)
+# Hub TMX generator (60 wide × 40 tall) — used for all three hub maps.
+#
+# Each hub has:
+#   - 8 portal slots (same positions in every hub)
+#   - N-S path at x=29-31, exits at top/bottom
+#   - E-W path at y=17-22 with optional left/right exits (East Hub only)
+#
+# Call with:
+#   north_warp / south_warp: (dest_map, dest_x, dest_y) for N-S path exits
+#   west_warp  / east_warp:  (dest_map, dest_x, dest_y) or None
 # ---------------------------------------------------------------------------
-def build_farmhub():
+SLOT_POS = [
+    ( 8,  8), (20,  8), (32,  8), (44,  8),   # slots 1-4
+    ( 8, 28), (20, 28), (32, 28), (44, 28),    # slots 5-8
+]
+PATH_Y1, PATH_Y2 = 17, 22   # E-W path rows (inclusive)
+NS_XS = range(29, 32)       # N-S path columns x=29,30,31
+
+
+def build_hub(hub_name, north_warp, south_warp, west_warp=None, east_warp=None):
     W, H = 60, 40
-    SLOT_POS = [
-        ( 8,  8), (20,  8), (32,  8), (44,  8),   # slots 1-4
-        ( 8, 28), (20, 28), (32, 28), (44, 28),    # slots 5-8
-    ]
-    PATH_Y1, PATH_Y2 = 17, 22   # E-W path rows (inclusive): road_N + 3 road + road_S
+    has_west = west_warp is not None
+    has_east = east_warp is not None
 
     # ── BACK layer ─────────────────────────────────────────────────────────
     back = make_grid(W, H, GRASS)
@@ -135,11 +129,11 @@ def build_farmhub():
         set_tile(back, 0, y, DARK)
         set_tile(back, W-1, y, DARK)
 
-    # Cliff side walls (left x=0-2, right x=57-59), skip path opening
+    # Cliff side walls (left x=0-2, right x=57-59)
+    # Skip path-row opening only for hubs that have west/east exits.
     for y in range(2, 38):
-        if PATH_Y1 <= y <= PATH_Y2:
-            # Path opening — keep grass (default)
-            pass
+        if (has_west or has_east) and PATH_Y1 <= y <= PATH_Y2:
+            pass  # E-W path opening — tiles set below
         else:
             set_tile(back, 0, y, DARK)
             set_tile(back, 1, y, CLIFF)
@@ -160,7 +154,7 @@ def build_farmhub():
         set_tile(back, x, 3, G_SHADE)
         set_tile(back, x, 36, G_SHADE)
 
-    # Scatter dark grass patches in interior for variety
+    # Random grass variety
     for y in range(4, 36):
         for x in range(4, W-4):
             r = random.random()
@@ -169,26 +163,27 @@ def build_farmhub():
             elif r < 0.10:
                 back[y][x] = G_DARK
 
-    # E-W main path (y=PATH_Y1 to PATH_Y2, full width except cliff walls)
-    # y=17: road north edge
+    # E-W main path (full width)
     set_row(back, PATH_Y1, ROAD_N, 0, W)
-    # y=18-20: main road
     for y in range(PATH_Y1+1, PATH_Y2):
         set_row(back, y, ROAD, 0, W)
-    # y=22: road south edge
     set_row(back, PATH_Y2, ROAD_S, 0, W)
-    # Re-apply cliff walls on path rows (left x=0-1 and right x=58-59 are clear)
-    for y in range(PATH_Y1, PATH_Y2+1):
-        set_tile(back, 0, y, GRASS)     # left path opening
-        set_tile(back, 1, y, GRASS_A)
-        set_tile(back, W-1, y, GRASS)   # right path opening
-        set_tile(back, W-2, y, GRASS_A)
 
-    # Vertical connector paths (single road tile wide) from portals to E-W path
-    for px, py in SLOT_POS[:4]:   # upper portals: connect DOWN to path north edge
+    # E-W path openings — only punch through cliff if there's a warp on that side
+    if has_west:
+        for y in range(PATH_Y1, PATH_Y2+1):
+            set_tile(back, 0, y, GRASS)
+            set_tile(back, 1, y, GRASS_A)
+    if has_east:
+        for y in range(PATH_Y1, PATH_Y2+1):
+            set_tile(back, W-1, y, GRASS)
+            set_tile(back, W-2, y, GRASS_A)
+
+    # Vertical connector paths from portals to E-W path
+    for px, py in SLOT_POS[:4]:   # upper portals → down to path north edge
         for cy in range(py+2, PATH_Y1):
             set_tile(back, px, cy, ROAD)
-    for px, py in SLOT_POS[4:]:   # lower portals: connect UP to path south edge
+    for px, py in SLOT_POS[4:]:   # lower portals → up to path south edge
         for cy in range(PATH_Y2+1, py-1):
             set_tile(back, px, cy, ROAD)
 
@@ -200,12 +195,18 @@ def build_farmhub():
                 if 3 < nx < W-4 and 3 < ny < H-4:
                     back[ny][nx] = GRASS_C
 
+    # N-S connector path (x=29-31), skip E-W road rows (already full-width road)
+    for py in range(0, H):
+        if PATH_Y1 <= py <= PATH_Y2:
+            continue
+        for px in NS_XS:
+            set_tile(back, px, py, ROAD)
+
     # ── BUILDINGS layer ─────────────────────────────────────────────────────
     buildings = make_grid(W, H, EMPTY)
 
-    # ── PATHS layer (forage spawns; warps are in Warp map property) ─────────
+    # ── PATHS layer (forage spawns) ─────────────────────────────────────────
     paths = make_grid(W, H, EMPTY)
-    # Scatter forage spawn tiles (2015=forage marker from Backwoods, firstgid=16: 2016,2017)
     FORAGE = 2017
     for y in range(4, 36):
         for x in range(4, W-4):
@@ -215,44 +216,31 @@ def build_farmhub():
     # ── FRONT layer — cliff face + trees ────────────────────────────────────
     front = make_grid(W, H, EMPTY)
 
-    # Upper-left cliff face (diagonal, copied from Backwoods rows 0-6)
-    for fy, row in enumerate(CLIFF_FACE_ROWS):
+    for fy, row in enumerate(CLIFF_FACE_ROWS):   # upper-left
         for fx, t in enumerate(row):
             set_tile(front, fx, fy, t)
-
-    # Upper-right cliff face (mirror: just use same cliff face tiles going right-to-left)
-    for fy, row in enumerate(CLIFF_FACE_ROWS):
+    for fy, row in enumerate(CLIFF_FACE_ROWS):   # upper-right (mirror)
         for fi, t in enumerate(row):
             set_tile(front, W-1-fi, fy, t)
-
-    # Lower-left and lower-right cliff face (flipped vertically)
-    for fy, row in enumerate(CLIFF_FACE_ROWS):
+    for fy, row in enumerate(CLIFF_FACE_ROWS):   # lower corners
         for fx, t in enumerate(row):
             set_tile(front, fx, H-1-fy, t)
             set_tile(front, W-1-fx, H-1-fy, t)
 
-    # Tree positions (x,y = top-left of 3×4 tree).
-    # Safe zone exclusions: portals ±4 tiles, E-W path band y=15-24, cliff walls x<5,
-    # and N-S connector path band (x=27-33 centre ±3).
     TREES = [
-        # Upper half
         (5,  3), (14, 3), (24, 3), (37, 3), (50, 3),
         (5,  7), (23, 6), (37, 5), (50, 7),
         (5, 12), (13,12), (24,13), (50,12),
-        # Lower half
         (5, 23), (24,24), (37,23), (50,24),
         (5, 29), (15,29), (24,29), (50,29),
         (5, 33), (24,33), (37,34), (50,33),
     ]
-    NS_CENTER = 30   # centre x of the N-S path
+    NS_CENTER = 30
     for tx, ty in TREES:
-        # Skip if touches E-W path band
         if PATH_Y1-3 <= ty+3 and ty <= PATH_Y2+3:
             continue
-        # Skip if centre (tx+1) is within 3 tiles of N-S path centre
         if abs(tx+1 - NS_CENTER) < 3:
             continue
-        # Skip if overlaps with a slot portal
         overlap = False
         for px, py in SLOT_POS:
             if abs(tx+1 - px) < 4 and abs(ty+1 - py) < 5:
@@ -261,39 +249,30 @@ def build_farmhub():
             continue
         place_tree(front, tx, ty)
 
-    # ── AlwaysFront layer (empty — no overhanging canopy needed) ────────────
+    # ── AlwaysFront layer ───────────────────────────────────────────────────
     alwaysfront = make_grid(W, H, EMPTY)
 
-    # ── North-South connector path (x=29-31) ────────────────────────────────
-    # Connects north edge (→ Backwoods) through the E-W road to south edge (→ Forest).
-    # Overwriting cliff tiles at y=0-1 and y=38-39 creates the entrance openings.
-    NS_XS = range(29, 32)   # columns x=29, 30, 31
-    for py in range(0, H):
-        if PATH_Y1 <= py <= PATH_Y2:
-            continue        # already full-width E-W road
-        for px in NS_XS:
-            set_tile(back, px, py, ROAD)
-
-    # --- Warp property string ---
-    # Left exits → Farm
-    farm_warps = " ".join(
-        f"-1 {y} Farm 79 17" for y in range(PATH_Y1, PATH_Y2+1)
-    )
-    # Right exits → BusStop
-    bus_warps = " ".join(
-        f"60 {y} BusStop 11 23" for y in range(PATH_Y1, PATH_Y2+1)
-    )
-    # Slot portal warps — arrive at (40, 5) on player farm (clear of top-edge return warp)
-    slot_warps = " ".join(
+    # ── Warp property string ────────────────────────────────────────────────
+    warp_parts = []
+    if west_warp:
+        warp_parts.append(" ".join(
+            f"-1 {y} {west_warp[0]} {west_warp[1]} {west_warp[2]}"
+            for y in range(PATH_Y1, PATH_Y2+1)
+        ))
+    if east_warp:
+        warp_parts.append(" ".join(
+            f"{W} {y} {east_warp[0]} {east_warp[1]} {east_warp[2]}"
+            for y in range(PATH_Y1, PATH_Y2+1)
+        ))
+    nd, nx, ny_ = north_warp
+    sd, sx, sy = south_warp
+    warp_parts.append(" ".join(f"{px} -1 {nd} {nx} {ny_}" for px in NS_XS))
+    warp_parts.append(" ".join(f"{px} {H} {sd} {sx} {sy}" for px in NS_XS))
+    warp_parts.append(" ".join(
         f"{px} {py} MultiFarm_Farm_{i+1} 40 5"
         for i, (px, py) in enumerate(SLOT_POS)
-    )
-    # North exits → Backwoods (player arrives at Backwoods 14 38, stepping south)
-    north_warps = " ".join(f"{px} -1 Backwoods 14 38" for px in NS_XS)
-    # South exits → Forest (player arrives at Forest 68 1)
-    south_warps = " ".join(f"{px} {H} Forest 68 1" for px in NS_XS)
-
-    warp_str = f"{farm_warps} {bus_warps} {slot_warps} {north_warps} {south_warps}"
+    ))
+    warp_str = " ".join(warp_parts)
 
     tmx = f"""<?xml version="1.0"?>
 <map version="1.4" tiledversion="1.4.2" orientation="orthogonal" renderorder="right-down" compressionlevel="0" width="{W}" height="{H}" tilewidth="16" tileheight="16" infinite="0" nextlayerid="9" nextobjectid="1">
@@ -357,11 +336,10 @@ def build_farmhub():
   <objectgroup id="8" name="Paths" visible="false" locked="false" />
 </map>
 """
-    path = os.path.join(OUT_DIR, "FarmHub.tmx")
-    with open(path, "w") as f:
+    out_path = os.path.join(OUT_DIR, f"{hub_name}.tmx")
+    with open(out_path, "w") as f:
         f.write(tmx.lstrip())
-    print(f"Wrote {path}")
-    return SLOT_POS, PATH_Y1, PATH_Y2
+    print(f"Wrote {out_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -498,7 +476,26 @@ def build_interior_template(vanilla_name, output_name):
 
 
 if __name__ == "__main__":
-    slot_pos, path_y1, path_y2 = build_farmhub()
+    # East Hub — main hub between Farm (west) and BusStop (east)
+    # N-S path leads to North Hub (above) and South Hub (below)
+    build_hub("MultiFarm_Hub_East",
+        north_warp=("MultiFarm_Hub_North", 30, 37),  # arrive at bottom of North Hub
+        south_warp=("MultiFarm_Hub_South", 30,  2),  # arrive at top of South Hub
+        west_warp =("Farm",    79, 17),
+        east_warp =("BusStop", 11, 23),
+    )
+
+    # North Hub — between Backwoods (north) and East Hub (south)
+    build_hub("MultiFarm_Hub_North",
+        north_warp=("Backwoods",         14, 38),  # arrive near south edge of Backwoods
+        south_warp=("MultiFarm_Hub_East", 30,  2), # arrive at top of East Hub
+    )
+
+    # South Hub — between East Hub (north) and Forest (south)
+    build_hub("MultiFarm_Hub_South",
+        north_warp=("MultiFarm_Hub_East", 30, 37), # arrive at bottom of East Hub
+        south_warp=("Forest", 68, 1),
+    )
 
     for type_id in FARM_TYPE_SOURCES:
         build_player_farm(type_id)
@@ -506,9 +503,17 @@ if __name__ == "__main__":
     build_interior_template("FarmCave.tmx",  "PlayerFarmCave.tmx")
     build_interior_template("FarmHouse.tmx", "PlayerFarmHouse.tmx")
 
-    print("\nSlot portal positions (for FarmHubManager.cs):")
-    for i, (x, y) in enumerate(slot_pos):
+    print("\nSlot portal positions (same in all 3 hubs):")
+    for i, (x, y) in enumerate(SLOT_POS):
         print(f"  Slot {i+1}: ({x}, {y})")
-    print(f"\nFarm/BusStop path rows: y={path_y1} to y={path_y2}")
-    print(f"Farm left exit:     x=-1, y={path_y1}-{path_y2} -> Farm 79 17")
-    print(f"BusStop right exit: x=60, y={path_y1}-{path_y2} -> BusStop 11 23")
+    print(f"\nE-W path rows: y={PATH_Y1}–{PATH_Y2}  (East Hub only has west/east exits)")
+    print(f"N-S path cols: x=29-31  (all 3 hubs)")
+    print(f"\nHub entry coordinates:")
+    print(f"  East Hub from Farm/west:     ( 2, 20)")
+    print(f"  East Hub from BusStop/east:  (57, 20)")
+    print(f"  East Hub from North Hub:     (30,  2)")
+    print(f"  East Hub from South Hub:     (30, 37)")
+    print(f"  North Hub from Backwoods:    (30,  2)")
+    print(f"  North Hub from East Hub:     (30, 37)")
+    print(f"  South Hub from East Hub:     (30,  2)")
+    print(f"  South Hub from Forest:       (30, 37)")
