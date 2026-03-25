@@ -7,13 +7,12 @@ using System.Linq;
 namespace MultiFarm
 {
     /// <summary>
-    /// Intercepts Farm↔BusStop warps at the source (before any transition animation)
-    /// and redirects them through the Farm Hub.
+    /// Intercepts warps before the fade-to-black transition so the player always
+    /// arrives at the right tile on the first warp with no double-warp flash.
     ///
-    /// In SDV 1.6 the Farm↔BusStop connection is no longer stored in location.warps,
-    /// so it can't be redirected via map asset edits.  Patching Game1.warpFarmer lets
-    /// us change the destination before the game starts the fade-to-black, eliminating
-    /// the brief flash of the wrong location that the OnWarped approach causes.
+    /// Handles:
+    ///   Farm↔BusStop   — hardcoded in SDV 1.6, not in location.warps
+    ///   Hub→player farm — TMX warps use a placeholder tile; corrected here
     /// </summary>
     [HarmonyPatch]
     internal class BusStopWarpPatch
@@ -50,9 +49,9 @@ namespace MultiFarm
                 locationRequest = new LocationRequest(
                     FarmHubManager.HubNameFarm, false,
                     Game1.getLocationFromName(FarmHubManager.HubNameFarm));
-                tileX                   = FarmHubManager.HubFarmEntryFromFarm.X;
-                tileY                   = FarmHubManager.HubFarmEntryFromFarm.Y;
-                facingDirectionAfterWarp = 1; // face east into hub
+                tileX                    = FarmHubManager.HubFarmEntryFromFarm.X;
+                tileY                    = FarmHubManager.HubFarmEntryFromFarm.Y;
+                facingDirectionAfterWarp = 1;
             }
             // BusStop west edge → Farm Hub (east wall, spine position)
             else if (dest == "Farm" && from == "BusStop")
@@ -60,9 +59,30 @@ namespace MultiFarm
                 locationRequest = new LocationRequest(
                     FarmHubManager.HubNameFarm, false,
                     Game1.getLocationFromName(FarmHubManager.HubNameFarm));
-                tileX                   = FarmHubManager.HubFarmEntryFromBusStop.X;
-                tileY                   = FarmHubManager.HubFarmEntryFromBusStop.Y;
-                facingDirectionAfterWarp = 3; // face west into hub
+                tileX                    = FarmHubManager.HubFarmEntryFromBusStop.X;
+                tileY                    = FarmHubManager.HubFarmEntryFromBusStop.Y;
+                facingDirectionAfterWarp = 3;
+            }
+            // Hub portal → player farm: TMX warp uses a placeholder tile (75,15).
+            // Correct destination tile here so the player arrives right on the first warp.
+            else if (FarmHubManager.IsHubLocation(from) &&
+                     (dest == "Farm" || dest.StartsWith(PlayerFarmManager.FarmPrefix)))
+            {
+                var player = Game1.player;
+                if (player is not null)
+                {
+                    int slot = ModEntry.Instance.FarmManager
+                                   .GetSlotForPlayer(player.UniqueMultiplayerID);
+                    if (slot > 0)
+                    {
+                        var (rx, ry, rfacing) = ModEntry.Instance.FarmManager
+                                                    .GetHubArrivalOnFarm(slot, from);
+                        tileX                    = rx;
+                        tileY                    = ry;
+                        facingDirectionAfterWarp = rfacing;
+                        // locationRequest stays the same — destination farm is correct
+                    }
+                }
             }
         }
     }

@@ -184,35 +184,11 @@ namespace MultiFarm
         {
             if (!Config.ReplaceVanillaWarps) return;
 
-            // Note: vanilla Farm↔BusStop/Backwoods/Forest warp interception is now
-            // handled upstream without double-warp:
-            //   Farm↔BusStop     → WarpInterceptPatch (Harmony prefix on Game1.warpFarmer)
-            //   Farm↔Backwoods   → OnAssetRequested edit on Maps/Farm + Maps/Backwoods
-            //   Farm↔Forest      → OnAssetRequested edit on Maps/Farm + Maps/Forest
-
             if (FarmHubManager.IsHubLocation(e.NewLocation?.Name))
                 HubManager.OnPlayerEnterHub(e.Player, e.NewLocation!.Name);
 
-            // Hub portal → player farm: re-warp to correct spawn position based on which hub
-            // the player came from. The TMX warp uses a placeholder destination; OnWarped
-            // immediately corrects it so the player lands at the right edge of their farm.
-            if (e.Player.IsLocalPlayer && FarmHubManager.IsHubLocation(e.OldLocation?.Name))
-            {
-                string farmName = e.NewLocation?.Name ?? "";
-                bool isPlayerFarm = farmName == "Farm" ||
-                                    farmName.StartsWith(PlayerFarmManager.FarmPrefix);
-                if (isPlayerFarm)
-                {
-                    int slot = FarmManager.GetSlotForPlayer(e.Player.UniqueMultiplayerID);
-                    if (slot > 0)
-                    {
-                        var (rx, ry, rfacing) =
-                            FarmManager.GetHubArrivalOnFarm(slot, e.OldLocation!.Name);
-                        Game1.warpFarmer(farmName, rx, ry, rfacing);
-                        return;
-                    }
-                }
-            }
+            // Hub→farm arrival position is now corrected in WarpInterceptPatch before
+            // the warp fires, so no re-warp is needed here.
         }
 
         private void OnRenderedWorld(object? sender, RenderedWorldEventArgs e)

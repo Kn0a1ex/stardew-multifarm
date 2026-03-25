@@ -284,6 +284,13 @@ def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5), w=HUB_W, h=HUB_H)
   </tileset>
   <tileset firstgid="16" name="outdoor" tilewidth="16" tileheight="16" tilecount="1975" columns="25">
     <image source="spring_outdoorsTileSheet" width="400" height="1264" />
+    <!-- NoSpawn=All on every grass tile used in hub maps prevents SDV from
+         spawning bushes/foliage regardless of the external tileset properties. -->
+    <tile id="175"><properties><property name="NoSpawn" value="All"/></properties></tile>
+    <tile id="407"><properties><property name="NoSpawn" value="All"/></properties></tile>
+    <tile id="335"><properties><property name="NoSpawn" value="All"/></properties></tile>
+    <tile id="351"><properties><property name="NoSpawn" value="All"/></properties></tile>
+    <tile id="380"><properties><property name="NoSpawn" value="All"/></properties></tile>
   </tileset>
   <layer id="1" name="Back" width="{W}" height="{H}" opacity="1" offsetx="0" offsety="0">
     <properties />
