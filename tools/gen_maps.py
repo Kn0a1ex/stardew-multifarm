@@ -344,136 +344,151 @@ def build_farmhub():
 
 
 # ---------------------------------------------------------------------------
-# PlayerFarm.tmx  (80 wide x 65 tall) — based on vanilla Farm.tmx layout
-# Farm.tmx uses firstgid=129 for outdoor sheet. We'll use same tilesets.
+# Per-type PlayerFarm TMX generation
+#
+# Farm type IDs match Stardew Valley's internal values:
+#   0=Standard, 1=Riverland, 2=Forest, 3=Hill-top, 4=Wilderness,
+#   5=FourCorners, 6=Meadowlands/Ranching
+#
+# Each type gets its own TMX: PlayerFarm_0.tmx … PlayerFarm_6.tmx
+# The Warp property is left empty — PlayerFarmManager adds slot-specific
+# runtime warps (top-edge return to hub, cave entrance, farmhouse entrance).
 # ---------------------------------------------------------------------------
-def build_playerfarm():
-    """
-    Read Farm.tmx tile data for Back/Buildings/Paths/Front/AlwaysFront layers
-    and write a PlayerFarm.tmx that:
-      - Has the same farmland area as vanilla Farm
-      - Replaces Farm's warps with a single return warp to MultiFarm_Hub
-      - Removes the FarmCave warp (no cave per player farm)
-    """
-    FARM_TMX = os.path.join(os.path.dirname(__file__), "..",
-                            "vanilla-maps", "Farm.tmx")
 
-    with open(FARM_TMX, "r") as f:
-        farm_src = f.read()
+FARM_TYPE_SOURCES = {
+    0: "Farm.tmx",
+    1: "Farm_Fishing.tmx",
+    2: "Farm_Foraging.tmx",
+    3: "Farm_Mining.tmx",
+    4: "Farm_Combat.tmx",
+    5: "Farm_FourCorners.tmx",
+    6: "Farm_Ranching.tmx",
+}
 
+
+def _extract_map_attr(src, attr):
+    import re
+    m = re.search(rf'{attr}="(\d+)"', src)
+    return int(m.group(1)) if m else None
+
+
+def _extract_layer(src, layer_name):
+    import re
+    pat = rf'<layer[^>]*name="{layer_name}"[^>]*>.*?<data encoding="csv">\n(.*?)\n\s*</data>'
+    m = re.search(pat, src, re.DOTALL)
+    return m.group(1).strip() if m else None
+
+
+def _extract_tilesets(src):
+    """Return the raw tileset XML blocks from a TMX source."""
+    import re
+    return re.findall(r'<tileset\b.*?</tileset>', src, re.DOTALL)
+
+
+def build_player_farm(type_id):
+    """Generate PlayerFarm_{type_id}.tmx from the corresponding vanilla Farm TMX."""
     import re
 
-    # Extract each layer's CSV data
-    def extract_layer(src, layer_name):
-        pat = rf'<layer[^>]*name="{layer_name}"[^>]*>.*?<data encoding="csv">\n(.*?)\n\s*</data>'
-        m = re.search(pat, src, re.DOTALL)
-        if m:
-            return m.group(1).strip()
-        return None
+    src_name = FARM_TYPE_SOURCES[type_id]
+    src_path = os.path.join(os.path.dirname(__file__), "..", "vanilla-maps", src_name)
+    with open(src_path, "r") as f:
+        src = f.read()
+
+    W = _extract_map_attr(src, "width")
+    H = _extract_map_attr(src, "height")
 
     layers = {}
     for lname in ("Back", "Buildings", "Paths", "Front", "AlwaysFront", "AlwaysFront2"):
-        data = extract_layer(farm_src, lname)
+        data = _extract_layer(src, lname)
         if data:
             layers[lname] = data
 
-    W, H = 80, 65
+    tilesets_xml = "\n".join(_extract_tilesets(src))
 
-    # No static return warp in the TMX — PlayerFarmManager adds slot-specific
-    # return warps at runtime (top edge y=-1, x=38-42 → hub slot portal+2).
-    return_warp = ""
-
-    # Build layer blocks
     def layer_block(lid, name, data):
-        return f"""  <layer id="{lid}" name="{name}" width="{W}" height="{H}" opacity="1" offsetx="0" offsety="0">
-    <properties />
-    <data encoding="csv">
-{data}
-    </data>
-  </layer>"""
+        return (
+            f'  <layer id="{lid}" name="{name}" width="{W}" height="{H}" '
+            f'opacity="1" offsetx="0" offsety="0">\n'
+            f'    <properties />\n'
+            f'    <data encoding="csv">\n'
+            f'{data}\n'
+            f'    </data>\n'
+            f'  </layer>'
+        )
 
     layer_ids = {"Back": 1, "Buildings": 2, "Paths": 3,
                  "Front": 4, "AlwaysFront": 5, "AlwaysFront2": 6}
-    layer_blocks = []
-    for lname in ("Back", "Buildings", "Paths", "Front", "AlwaysFront", "AlwaysFront2"):
-        if lname in layers:
-            layer_blocks.append(layer_block(layer_ids[lname], lname, layers[lname]))
-
+    layer_blocks = [
+        layer_block(layer_ids[n], n, layers[n])
+        for n in ("Back", "Buildings", "Paths", "Front", "AlwaysFront", "AlwaysFront2")
+        if n in layers
+    ]
     layers_xml = "\n".join(layer_blocks)
+    next_layer_id = max(layer_ids[n] for n in layers) + 1
+    next_obj_id   = next_layer_id + 5  # object groups come after
 
-    tmx = f"""<?xml version="1.0"?>
-<map version="1.4" tiledversion="1.4.2" orientation="orthogonal" renderorder="right-down" compressionlevel="0" width="{W}" height="{H}" tilewidth="16" tileheight="16" infinite="0" nextlayerid="13" nextobjectid="1">
-  <properties>
-    <property name="AllowGrassSurviveInWinter" type="string" value="T" />
-    <property name="Outdoors" type="string" value="T" />
-    <property name="Warp" type="string" value="{return_warp}" />
-  </properties>
-  <tileset firstgid="1" name="extra_tiles" tilewidth="16" tileheight="16" tilecount="64" columns="8">
-    <image source="spring_outdoorTileSheet_extra" width="128" height="128" />
-    <tile id="0">
-      <properties>
-        <property name="Buildable" type="bool" value="True" />
-        <property name="CanPlantTrees" type="string" value="T" />
-        <property name="NoSpawn" type="string" value="T" />
-        <property name="Type" type="string" value="Grass" />
-      </properties>
-    </tile>
-    <tile id="1">
-      <properties>
-        <property name="Buildable" type="bool" value="True" />
-        <property name="NoSpawn" type="string" value="T" />
-        <property name="Type" type="string" value="Dirt" />
-      </properties>
-    </tile>
-    <tile id="2">
-      <properties>
-        <property name="Buildable" type="bool" value="True" />
-        <property name="CanPlantTrees" type="string" value="T" />
-        <property name="Diggable" type="string" value="T" />
-        <property name="NoSpawn" type="string" value="T" />
-        <property name="Type" type="string" value="Dirt" />
-      </properties>
-    </tile>
-  </tileset>
-  <tileset firstgid="65" name="Paths" tilewidth="16" tileheight="16" tilecount="64" columns="4">
-    <image source="paths" width="64" height="256" />
-  </tileset>
-  <tileset firstgid="129" name="untitled tile sheet" tilewidth="16" tileheight="16" tilecount="1975" columns="25">
-    <image source="spring_outdoorsTileSheet" width="400" height="1264" />
-    <tile id="150">
-      <properties>
-        <property name="Buildable" type="bool" value="True" />
-        <property name="Type" type="string" value="Grass" />
-      </properties>
-    </tile>
-    <tile id="175">
-      <properties>
-        <property name="Buildable" type="bool" value="True" />
-        <property name="Type" type="string" value="Grass" />
-      </properties>
-    </tile>
-  </tileset>
-{layers_xml}
-  <objectgroup id="7" name="Back" visible="false" locked="false" />
-  <objectgroup id="8" name="Buildings" visible="false" locked="false" />
-  <objectgroup id="9" name="Paths" visible="false" locked="false" />
-  <objectgroup id="10" name="Front" visible="false" locked="false" />
-  <objectgroup id="11" name="AlwaysFront" visible="false" locked="false" />
-  <objectgroup id="12" name="AlwaysFront2" visible="false" locked="false" />
-</map>
-"""
-    path = os.path.join(OUT_DIR, "PlayerFarm.tmx")
-    with open(path, "w") as f:
-        f.write(tmx.lstrip())
-    print(f"Wrote {path}")
+    tmx = (
+        f'<?xml version="1.0"?>\n'
+        f'<map version="1.4" tiledversion="1.4.2" orientation="orthogonal" renderorder="right-down" '
+        f'compressionlevel="0" width="{W}" height="{H}" tilewidth="16" tileheight="16" '
+        f'infinite="0" nextlayerid="{next_layer_id + 5}" nextobjectid="1">\n'
+        f'  <properties>\n'
+        f'    <property name="AllowGrassSurviveInWinter" type="string" value="T" />\n'
+        f'    <property name="Outdoors" type="string" value="T" />\n'
+        f'    <property name="Warp" type="string" value="" />\n'
+        f'  </properties>\n'
+        f'{tilesets_xml}\n'
+        f'{layers_xml}\n'
+        f'  <objectgroup id="{next_layer_id}"   name="Back"         visible="false" locked="false" />\n'
+        f'  <objectgroup id="{next_layer_id+1}" name="Buildings"    visible="false" locked="false" />\n'
+        f'  <objectgroup id="{next_layer_id+2}" name="Paths"        visible="false" locked="false" />\n'
+        f'  <objectgroup id="{next_layer_id+3}" name="Front"        visible="false" locked="false" />\n'
+        f'  <objectgroup id="{next_layer_id+4}" name="AlwaysFront"  visible="false" locked="false" />\n'
+        f'</map>\n'
+    )
+
+    out_path = os.path.join(OUT_DIR, f"PlayerFarm_{type_id}.tmx")
+    with open(out_path, "w") as f:
+        f.write(tmx)
+    print(f"Wrote {out_path}  ({W}x{H})")
+
+
+def build_interior_template(vanilla_name, output_name):
+    """
+    Copy a vanilla interior TMX (FarmCave, FarmHouse) clearing its Warp property.
+    PlayerFarmManager patches Warp at runtime with slot-specific destinations.
+    """
+    import re
+
+    src_path = os.path.join(os.path.dirname(__file__), "..", "vanilla-maps", vanilla_name)
+    with open(src_path, "r") as f:
+        src = f.read()
+
+    # Clear Warp value so the runtime patch is the sole warp source
+    out = re.sub(
+        r'(<property name="Warp"[^>]*value=")[^"]*(")',
+        r'\g<1>\g<2>',
+        src
+    )
+
+    out_path = os.path.join(OUT_DIR, output_name)
+    with open(out_path, "w") as f:
+        f.write(out)
+    print(f"Wrote {out_path}  (template from {vanilla_name})")
 
 
 if __name__ == "__main__":
     slot_pos, path_y1, path_y2 = build_farmhub()
-    build_playerfarm()
+
+    for type_id in FARM_TYPE_SOURCES:
+        build_player_farm(type_id)
+
+    build_interior_template("FarmCave.tmx",  "PlayerFarmCave.tmx")
+    build_interior_template("FarmHouse.tmx", "PlayerFarmHouse.tmx")
+
     print("\nSlot portal positions (for FarmHubManager.cs):")
     for i, (x, y) in enumerate(slot_pos):
         print(f"  Slot {i+1}: ({x}, {y})")
     print(f"\nFarm/BusStop path rows: y={path_y1} to y={path_y2}")
-    print(f"Farm left exit:    x=-1, y={path_y1}-{path_y2} -> Farm 79 17")
+    print(f"Farm left exit:     x=-1, y={path_y1}-{path_y2} -> Farm 79 17")
     print(f"BusStop right exit: x=60, y={path_y1}-{path_y2} -> BusStop 11 23")

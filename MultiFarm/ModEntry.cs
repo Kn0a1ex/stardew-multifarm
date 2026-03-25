@@ -4,7 +4,6 @@ using StardewModdingAPI.Events;
 using StardewValley;
 using System;
 using System.Collections.Generic;
-using System.IO;
 
 namespace MultiFarm
 {
@@ -13,6 +12,17 @@ namespace MultiFarm
     /// </summary>
     public class ModEntry : Mod
     {
+        // ── Multiplayer message type IDs ──────────────────────────────────────
+        /// <summary>Host → client: "you need to pick a farm type".</summary>
+        public const string MsgNeedsFarmSelection = "MultiFarm.NeedsFarmSelection";
+
+        /// <summary>Client → host: "I chose this farm type".</summary>
+        public const string MsgFarmChosen = "MultiFarm.FarmChosen";
+
+        /// <summary>Host → all clients: current assignment table.</summary>
+        public const string MsgSyncAssignments = "MultiFarm.SyncAssignments";
+
+        // ── Properties ───────────────────────────────────────────────────────
         internal static ModEntry Instance { get; private set; } = null!;
         internal ModConfig Config { get; private set; } = null!;
         internal FarmHubManager HubManager { get; private set; } = null!;
@@ -26,18 +36,19 @@ namespace MultiFarm
             HubManager  = new FarmHubManager(helper, Monitor);
             FarmManager = new PlayerFarmManager(helper, Monitor);
 
-            // Location injection — register the hub and all player farms
-            helper.Events.GameLoop.GameLaunched    += OnGameLaunched;
-            helper.Events.GameLoop.SaveLoaded      += OnSaveLoaded;
-            helper.Events.GameLoop.DayStarted      += OnDayStarted;
-            helper.Events.GameLoop.Saving          += OnSaving;
-            helper.Events.Player.Warped            += OnWarped;
-            helper.Events.Multiplayer.PeerConnected += OnPeerConnected;
+            helper.Events.GameLoop.GameLaunched      += OnGameLaunched;
+            helper.Events.GameLoop.SaveLoaded        += OnSaveLoaded;
+            helper.Events.GameLoop.DayStarted        += OnDayStarted;
+            helper.Events.GameLoop.Saving            += OnSaving;
+            helper.Events.Player.Warped              += OnWarped;
+            helper.Events.Multiplayer.PeerConnected  += OnPeerConnected;
+            helper.Events.Multiplayer.ModMessageReceived += OnModMessageReceived;
 
             // Console commands for debugging
-            helper.ConsoleCommands.Add("mf_status",  "Show MultiFarm status.",        CmdStatus);
-            helper.ConsoleCommands.Add("mf_assign",  "Assign farm: mf_assign <player> <slot 1-8>.", CmdAssign);
-            helper.ConsoleCommands.Add("mf_goto",    "Warp to a farm slot: mf_goto <slot 1-8>.",   CmdGoto);
+            helper.ConsoleCommands.Add("mf_status",  "Show MultiFarm status.",                          CmdStatus);
+            helper.ConsoleCommands.Add("mf_assign",  "Assign farm: mf_assign <player> <slot 1-8>.",     CmdAssign);
+            helper.ConsoleCommands.Add("mf_goto",    "Warp to a farm slot: mf_goto <slot 1-8>.",        CmdGoto);
+            helper.ConsoleCommands.Add("mf_selectfarm", "Open farm-selection menu for local player.",   CmdSelectFarm);
         }
 
         // ── Event handlers ───────────────────────────────────────────────────
@@ -50,7 +61,12 @@ namespace MultiFarm
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
             FarmManager.LoadAssignments();
+            FarmManager.EnsurePlayerFarmsExist();
             HubManager.PatchVanillaWarps();
+
+            // If the local player has no slot yet, show the farm-selection menu
+            if (FarmManager.GetSlotForPlayer(Game1.player.Name) == 0)
+                FarmManager.ShowFarmSelectionMenu(Game1.player);
         }
 
         private void OnDayStarted(object? sender, DayStartedEventArgs e)
@@ -65,15 +81,41 @@ namespace MultiFarm
 
         private void OnWarped(object? sender, WarpedEventArgs e)
         {
-            // When a player enters the hub, show their farm path highlight
             if (e.NewLocation?.Name == FarmHubManager.HubLocationName)
                 HubManager.OnPlayerEnterHub(e.Player);
         }
 
         private void OnPeerConnected(object? sender, PeerConnectedEventArgs e)
         {
-            // When a new player joins, ensure they have a farm and offer selection
             FarmManager.OnPeerConnected(e.Peer);
+        }
+
+        private void OnModMessageReceived(object? sender, ModMessageReceivedEventArgs e)
+        {
+            if (e.FromModID != ModManifest.UniqueID) return;
+
+            switch (e.Type)
+            {
+                case MsgNeedsFarmSelection:
+                    // We are a client and the host wants us to pick a farm type
+                    FarmManager.ShowFarmSelectionMenu(Game1.player);
+                    break;
+
+                case MsgFarmChosen:
+                    // We are the host and a client sent their farm-type choice
+                    if (Game1.IsMasterGame)
+                    {
+                        var payload = e.ReadAs<PlayerFarmManager.FarmChosenPayload>();
+                        FarmManager.OnRemoteFarmTypeChosen(e.FromPlayerID, payload.FarmType);
+                    }
+                    break;
+
+                case MsgSyncAssignments:
+                    // Host sent the current assignment table
+                    var sync = e.ReadAs<PlayerFarmManager.SyncPayload>();
+                    FarmManager.OnSyncAssignments(sync);
+                    break;
+            }
         }
 
         // ── Console commands ─────────────────────────────────────────────────
@@ -83,28 +125,39 @@ namespace MultiFarm
             Monitor.Log("=== MultiFarm Status ===", LogLevel.Info);
             Monitor.Log($"Hub registered: {HubManager.IsRegistered}", LogLevel.Info);
             foreach (var (slot, name) in FarmManager.GetAssignments())
-                Monitor.Log($"  Slot {slot}: {name}", LogLevel.Info);
+            {
+                int type = FarmManager.GetFarmTypeForPlayer(name);
+                Monitor.Log($"  Slot {slot}: {name} (farm type {type})", LogLevel.Info);
+            }
         }
 
         private void CmdAssign(string cmd, string[] args)
         {
-            if (args.Length < 2 || !int.TryParse(args[1], out int slot) || slot < 1 || slot > Config.MaxPlayers)
+            if (args.Length < 2 || !int.TryParse(args[1], out int slot)
+                || slot < 1 || slot > Config.MaxPlayers)
             {
                 Monitor.Log($"Usage: mf_assign <playerName> <slot 1-{Config.MaxPlayers}>", LogLevel.Warn);
                 return;
             }
-            FarmManager.AssignFarm(args[0], slot);
-            Monitor.Log($"Assigned {args[0]} → Slot {slot}", LogLevel.Info);
+            int farmType = args.Length >= 3 && int.TryParse(args[2], out int t) ? t : 0;
+            FarmManager.AssignFarm(args[0], slot, farmType);
+            Monitor.Log($"Assigned {args[0]} → Slot {slot} (type {farmType})", LogLevel.Info);
         }
 
         private void CmdGoto(string cmd, string[] args)
         {
-            if (args.Length < 1 || !int.TryParse(args[0], out int slot) || slot < 1 || slot > Config.MaxPlayers)
+            if (args.Length < 1 || !int.TryParse(args[0], out int slot)
+                || slot < 1 || slot > Config.MaxPlayers)
             {
                 Monitor.Log($"Usage: mf_goto <slot 1-{Config.MaxPlayers}>", LogLevel.Warn);
                 return;
             }
             FarmManager.WarpToFarm(Game1.player, slot);
+        }
+
+        private void CmdSelectFarm(string cmd, string[] args)
+        {
+            FarmManager.ShowFarmSelectionMenu(Game1.player);
         }
     }
 }
