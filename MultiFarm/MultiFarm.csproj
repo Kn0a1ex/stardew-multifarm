@@ -36,18 +36,17 @@
 
   <!--
     Deploy the [MultiFarm] Content CP pack to the Mods folder alongside the main mod.
-    $(ModFolderPath) is set by ModBuildConfig to e.g. .../Mods/MultiFarm; going one
-    level up gives the Mods folder so the CP pack lands next to the main mod.
+    $(GamePath) is provided by ModBuildConfig and points to the Stardew Valley folder.
   -->
-  <Target Name="DeployContentPack" AfterTargets="Deploy" Condition="'$(ModFolderPath)' != ''">
+  <Target Name="DeployContentPack" AfterTargets="Deploy" Condition="'$(GamePath)' != ''">
     <ItemGroup>
       <_ContentPackFiles Include="$(MSBuildProjectDirectory)\..\[MultiFarm] Content\**\*" />
     </ItemGroup>
     <Copy
       SourceFiles="@(_ContentPackFiles)"
-      DestinationFiles="@(_ContentPackFiles->'$(ModFolderPath)\..\[MultiFarm] Content\%(RecursiveDir)%(Filename)%(Extension)')"
+      DestinationFiles="@(_ContentPackFiles->'$(GamePath)\Mods\[MultiFarm] Content\%(RecursiveDir)%(Filename)%(Extension)')"
       SkipUnchangedFiles="true" />
-    <Message Text="Deployed [MultiFarm] Content CP pack to $(ModFolderPath)\..\[MultiFarm] Content" Importance="high" />
+    <Message Text="Deployed [MultiFarm] Content CP pack to $(GamePath)\Mods\[MultiFarm] Content" Importance="high" />
   </Target>
 
 </Project>
