@@ -32,8 +32,8 @@ OUT_DIR = FARM_OUT_DIR
 # ---------------------------------------------------------------------------
 # Back-layer tile constants (firstgid=16 for outdoor sheet)
 # ---------------------------------------------------------------------------
-CLIFF  = 396   # solid cliff fill
-DARK   = 367   # dark outside-cliff fill
+CLIFF  = 176   # dark soil/void border fill (Mountain.tmx background — no foliage)
+DARK   = 176   # same; using a single neutral value avoids tree tiles 367/396
 GRASS_C= 423   # portal patch grass
 GRASS  = 191   # main interior grass
 ROAD   = 169   # dirt road
@@ -286,11 +286,12 @@ def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5), w=HUB_W, h=HUB_H)
     <image source="spring_outdoorsTileSheet" width="400" height="1264" />
     <!-- NoSpawn=All on every grass tile used in hub maps prevents SDV from
          spawning bushes/foliage regardless of the external tileset properties. -->
+    <tile id="160"><properties><property name="NoSpawn" value="All"/></properties></tile>
     <tile id="175"><properties><property name="NoSpawn" value="All"/></properties></tile>
-    <tile id="407"><properties><property name="NoSpawn" value="All"/></properties></tile>
     <tile id="335"><properties><property name="NoSpawn" value="All"/></properties></tile>
     <tile id="351"><properties><property name="NoSpawn" value="All"/></properties></tile>
     <tile id="380"><properties><property name="NoSpawn" value="All"/></properties></tile>
+    <tile id="407"><properties><property name="NoSpawn" value="All"/></properties></tile>
   </tileset>
   <layer id="1" name="Back" width="{W}" height="{H}" opacity="1" offsetx="0" offsety="0">
     <properties />
