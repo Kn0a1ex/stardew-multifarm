@@ -38,7 +38,7 @@
     Deploy the [MultiFarm] Content CP pack to the Mods folder alongside the main mod.
     $(GamePath) is provided by ModBuildConfig and points to the Stardew Valley folder.
   -->
-  <Target Name="DeployContentPack" AfterTargets="Deploy" Condition="'$(GamePath)' != ''">
+  <Target Name="DeployContentPack" AfterTargets="DeployMod" Condition="'$(GamePath)' != ''">
     <ItemGroup>
       <_ContentPackFiles Include="$(MSBuildProjectDirectory)\..\[MultiFarm] Content\**\*" />
     </ItemGroup>
