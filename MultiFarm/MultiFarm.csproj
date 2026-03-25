@@ -33,4 +33,20 @@
     </Content>
   </ItemGroup>
 
+
+  <!--
+    Deploy the [MultiFarm] Content CP pack to the Mods folder alongside the main mod.
+    ModBuildConfig exposes $(GameModsPath); this target runs after the standard Deploy target.
+  -->
+  <Target Name="DeployContentPack" AfterTargets="Deploy" Condition="'$(GameModsPath)' != ''">
+    <ItemGroup>
+      <_ContentPackFiles Include="$(MSBuildProjectDirectory)\..\[MultiFarm] Content\**\*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(_ContentPackFiles)"
+      DestinationFiles="@(_ContentPackFiles->'$(GameModsPath)\[MultiFarm] Content\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+    <Message Text="Deployed [MultiFarm] Content CP pack to $(GameModsPath)\[MultiFarm] Content" Importance="high" />
+  </Target>
+
 </Project>
