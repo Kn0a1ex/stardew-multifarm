@@ -20,42 +20,46 @@ namespace MultiFarm
     {
         static IEnumerable<MethodBase> TargetMethods()
         {
-            // Only patch the overload that has both "locationName" (string) and
-            // "facingDirectionAfterWarp" (int).  Other overloads use LocationRequest
-            // instead of a string name, or bool flip instead of facing — injecting
-            // our prefix into those causes a Harmony parameter-not-found crash.
+            // In SDV 1.6 the primary warpFarmer overload takes a LocationRequest object,
+            // not a bare string.  The string overload either doesn't exist or isn't called
+            // for edge-of-map transitions, so we must patch the LocationRequest variant.
             return typeof(Game1)
                 .GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
                 .Where(m =>
                     m.Name == "warpFarmer" &&
                     m.GetParameters().Length >= 1 &&
-                    m.GetParameters()[0].ParameterType == typeof(string) &&
+                    m.GetParameters()[0].ParameterType == typeof(LocationRequest) &&
                     m.GetParameters().Any(p => p.Name == "facingDirectionAfterWarp"));
         }
 
         [HarmonyPrefix]
         static void Prefix(
-            ref string locationName,
-            ref int    tileX,
-            ref int    tileY,
-            ref int    facingDirectionAfterWarp)
+            ref LocationRequest locationRequest,
+            ref int             tileX,
+            ref int             tileY,
+            ref int             facingDirectionAfterWarp)
         {
             if (!ModEntry.Instance.Config.ReplaceVanillaWarps) return;
 
             string from = Game1.player?.currentLocation?.Name ?? "";
+            string dest = locationRequest?.Name ?? "";
 
             // Farm east edge → Farm Hub (west wall, slot 1 arrival position)
-            if (locationName == "BusStop" && from == "Farm")
+            if (dest == "BusStop" && from == "Farm")
             {
-                locationName            = FarmHubManager.HubNameFarm;
+                locationRequest = new LocationRequest(
+                    FarmHubManager.HubNameFarm, false,
+                    Game1.getLocationFromName(FarmHubManager.HubNameFarm));
                 tileX                   = FarmHubManager.HubFarmEntryFromFarm.X;
                 tileY                   = FarmHubManager.HubFarmEntryFromFarm.Y;
                 facingDirectionAfterWarp = 1; // face east into hub
             }
             // BusStop west edge → Farm Hub (east wall, spine position)
-            else if (locationName == "Farm" && from == "BusStop")
+            else if (dest == "Farm" && from == "BusStop")
             {
-                locationName            = FarmHubManager.HubNameFarm;
+                locationRequest = new LocationRequest(
+                    FarmHubManager.HubNameFarm, false,
+                    Game1.getLocationFromName(FarmHubManager.HubNameFarm));
                 tileX                   = FarmHubManager.HubFarmEntryFromBusStop.X;
                 tileY                   = FarmHubManager.HubFarmEntryFromBusStop.Y;
                 facingDirectionAfterWarp = 3; // face west into hub
