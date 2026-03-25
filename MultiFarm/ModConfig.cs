@@ -5,7 +5,10 @@ namespace MultiFarm
     /// </summary>
     public class ModConfig
     {
-        /// <summary>Maximum number of private farms (1–8).</summary>
+        /// <summary>
+        /// Total number of player farm slots, including the world host (1–8).
+        /// Default 8 = host + 7 guests.  The hub map has exactly 8 portals.
+        /// </summary>
         public int MaxPlayers { get; set; } = 8;
 
         /// <summary>

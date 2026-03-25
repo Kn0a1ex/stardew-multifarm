@@ -1,3 +1,6 @@
+using HarmonyLib;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
@@ -34,6 +37,8 @@ namespace MultiFarm
             HubManager  = new FarmHubManager(helper, Monitor);
             FarmManager = new PlayerFarmManager(helper, Monitor);
 
+            new Harmony(ModManifest.UniqueID).PatchAll();
+
             helper.Events.GameLoop.GameLaunched      += OnGameLaunched;
             helper.Events.GameLoop.SaveLoaded        += OnSaveLoaded;
             helper.Events.GameLoop.DayStarted        += OnDayStarted;
@@ -42,6 +47,7 @@ namespace MultiFarm
             helper.Events.Multiplayer.PeerConnected  += OnPeerConnected;
             helper.Events.Multiplayer.ModMessageReceived += OnModMessageReceived;
             helper.Events.Display.MenuChanged        += OnMenuChanged;
+            helper.Events.Display.RenderedWorld      += OnRenderedWorld;
 
             // Console commands for debugging
             helper.ConsoleCommands.Add("mf_status",  "Show MultiFarm status.",                          CmdStatus);
@@ -71,6 +77,31 @@ namespace MultiFarm
         private void OnDayStarted(object? sender, DayStartedEventArgs e)
         {
             FarmManager.EnsurePlayerFarmsExist();
+
+            // Redirect married NPC home locations to the spouse's private farmhouse.
+            // The schedule-string side is handled by NpcSchedulePatch (Harmony prefix).
+            // Here we fix DefaultMap/DefaultPosition so the NPC warps to the right
+            // location at the end of the night.  Only the host has authority to do this.
+            if (!Context.IsMainPlayer) return;
+            foreach (var farmer in Game1.getAllFarmers())
+            {
+                if (string.IsNullOrEmpty(farmer.spouse)) continue;
+                int slot = FarmManager.GetSlotForPlayer(farmer.Name);
+                if (slot == 0) continue;
+
+                var npc = Game1.getCharacterFromName(farmer.spouse);
+                if (npc is null) continue;
+
+                string hubHouse = PlayerFarmManager.FarmHouseName(slot);
+                if (npc.DefaultMap != hubHouse)
+                {
+                    npc.DefaultMap      = hubHouse;
+                    npc.DefaultPosition = new Vector2(3, 11) * Game1.tileSize;
+                    Monitor.Log(
+                        $"Redirected {npc.Name}'s home → {hubHouse}.",
+                        LogLevel.Debug);
+                }
+            }
         }
 
         private void OnSaving(object? sender, SavingEventArgs e)
@@ -82,6 +113,29 @@ namespace MultiFarm
         {
             if (e.NewLocation?.Name == FarmHubManager.HubLocationName)
                 HubManager.OnPlayerEnterHub(e.Player);
+        }
+
+        private void OnRenderedWorld(object? sender, RenderedWorldEventArgs e)
+        {
+            // Draw player names above their portal tiles when inside the hub.
+            if (!Context.IsWorldReady) return;
+            if (Game1.currentLocation?.Name != FarmHubManager.HubLocationName) return;
+
+            SpriteBatch b = e.SpriteBatch;
+            foreach (var (slot, name) in FarmManager.GetAssignments())
+            {
+                var portal = FarmHubManager.GetSlotWarpTile(slot);
+                if (portal == Point.Zero) continue;
+
+                // Center the label over the portal tile (one tile above it)
+                Vector2 measure  = Game1.smallFont.MeasureString(name);
+                float   screenX  = portal.X * Game1.tileSize - Game1.viewport.X
+                                   + (Game1.tileSize - measure.X) / 2f;
+                float   screenY  = (portal.Y - 1) * Game1.tileSize - Game1.viewport.Y;
+
+                Utility.drawTextWithShadow(b, name, Game1.smallFont,
+                    new Vector2(screenX, screenY), Color.White);
+            }
         }
 
         private void OnPeerConnected(object? sender, PeerConnectedEventArgs e)

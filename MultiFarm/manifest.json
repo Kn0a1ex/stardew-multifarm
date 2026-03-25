@@ -2,7 +2,7 @@
   "Name": "MultiFarm",
   "Author": "Alex",
   "Version": "0.1.0",
-  "Description": "Each player gets their own private farm, connected via a shared Farm Hub between the main farm and the bus stop. Supports up to 8 players.",
+  "Description": "Each player gets their own private farm, connected via a shared Farm Hub. Supports up to 8 players total (host + 7 guests).",
   "UniqueID": "Alex.MultiFarm",
   "EntryDll": "MultiFarm.dll",
   "MinimumApiVersion": "4.0.0",

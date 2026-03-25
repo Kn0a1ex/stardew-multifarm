@@ -6,30 +6,20 @@
     <TargetFramework>net6.0</TargetFramework>
     <Nullable>enable</Nullable>
     <Optimize>true</Optimize>
+    <!--
+      EnableModZip: automatically produces MultiFarm-<version>.zip in bin/Release/net6.0/
+      after a release build. Players extract that zip into their Mods folder.
+    -->
+    <EnableModZip>true</EnableModZip>
   </PropertyGroup>
 
   <ItemGroup>
     <!--
-      SMAPI and Stardew Valley DLL references.
-      Set GamePath in your environment or replace with the absolute path to your Stardew Valley install.
-      Linux default: ~/.steam/steam/steamapps/common/Stardew Valley/
+      ModBuildConfig auto-detects the Stardew Valley install on Windows / macOS / Linux
+      and wires up all required DLL references (SMAPI, StardewValley, MonoGame, xTile).
+      No GamePath env var or manual HintPath entries needed.
     -->
-    <Reference Include="StardewModdingAPI">
-      <HintPath>$(GamePath)/smapi-internal/StardewModdingAPI.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="StardewValley">
-      <HintPath>$(GamePath)/StardewValley.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="MonoGame.Framework">
-      <HintPath>$(GamePath)/MonoGame.Framework.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="xTile">
-      <HintPath>$(GamePath)/xTile.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
+    <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.*" />
   </ItemGroup>
 
   <ItemGroup>
