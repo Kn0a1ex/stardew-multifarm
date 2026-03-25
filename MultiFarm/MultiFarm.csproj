@@ -20,6 +20,8 @@
       No GamePath env var or manual HintPath entries needed.
     -->
     <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.*" />
+    <!-- Compile-time reference only; SMAPI ships its own 0Harmony.dll at runtime. -->
+    <PackageReference Include="Lib.Harmony" Version="2.*" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>
