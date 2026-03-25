@@ -20,13 +20,16 @@ namespace MultiFarm
     {
         static IEnumerable<MethodBase> TargetMethods()
         {
-            // Only patch overloads that have a "facingDirectionAfterWarp" parameter.
-            // The (string, int, int, bool flip) overload does not have this parameter
-            // and would cause a Harmony injection error if included.
+            // Only patch the overload that has both "locationName" (string) and
+            // "facingDirectionAfterWarp" (int).  Other overloads use LocationRequest
+            // instead of a string name, or bool flip instead of facing — injecting
+            // our prefix into those causes a Harmony parameter-not-found crash.
             return typeof(Game1)
                 .GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
                 .Where(m =>
                     m.Name == "warpFarmer" &&
+                    m.GetParameters().Length >= 1 &&
+                    m.GetParameters()[0].ParameterType == typeof(string) &&
                     m.GetParameters().Any(p => p.Name == "facingDirectionAfterWarp"));
         }
 
