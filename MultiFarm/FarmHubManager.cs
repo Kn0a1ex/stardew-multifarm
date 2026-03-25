@@ -29,17 +29,18 @@ namespace MultiFarm
         public const string HubNameForest    = "MultiFarm_Hub_Forest";
 
         // ── Portal positions (identical in all 3 hubs) ────────────────────────
+        // Single row of 8 at y=5, spacing 5 tiles center-to-center.
         // Players arriving from a player farm land at (portal.X, portal.Y + 2).
         private static readonly Dictionary<int, Point> SlotWarpTiles = new()
         {
-            { 1, new Point( 6,  5) },
-            { 2, new Point(15,  5) },
-            { 3, new Point(24,  5) },
-            { 4, new Point(33,  5) },
-            { 5, new Point( 6, 16) },
-            { 6, new Point(15, 16) },
-            { 7, new Point(24, 16) },
-            { 8, new Point(33, 16) },
+            { 1, new Point( 4,  5) },
+            { 2, new Point( 9,  5) },
+            { 3, new Point(14,  5) },
+            { 4, new Point(19,  5) },
+            { 5, new Point(24,  5) },
+            { 6, new Point(29,  5) },
+            { 7, new Point(34,  5) },
+            { 8, new Point(39,  5) },
         };
 
         // ── Farm Hub entry points (horizontal hub, west+east exits) ───────────

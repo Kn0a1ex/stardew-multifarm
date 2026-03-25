@@ -96,8 +96,8 @@ def grid_to_csv(g):
 HUB_W, HUB_H = 44, 24
 
 SLOT_POS = [
-    ( 6,  5), (15,  5), (24,  5), (33,  5),   # slots 1-4
-    ( 6, 16), (15, 16), (24, 16), (33, 16),    # slots 5-8
+    ( 4,  5), ( 9,  5), (14,  5), (19,  5),   # slots 1-4
+    (24,  5), (29,  5), (34,  5), (39,  5),    # slots 5-8
 ]
 
 # E-W path rows y=9-11; N-S entrance columns x=20-22 (north/south hubs)
@@ -129,14 +129,11 @@ def build_hub(hub_name, exits):
 
     # Main spine + portal connectors — direction depends on exits
     if has_horiz:
-        # Horizontal spine y=9-11, vertical branches to each portal
+        # Horizontal spine y=9-11, vertical stems from each portal down to spine
         for y in _PATH_YS:
             set_row(back, y, ROAD, 2, W-2)
-        for px, py in SLOT_POS[:4]:          # upper portals → down to spine top (y=9)
-            for cy in range(py+2, 9):
-                set_tile(back, px, cy, ROAD)
-        for px, py in SLOT_POS[4:]:          # lower portals → up from spine bottom (y=11)
-            for cy in range(12, py-1):
+        for px, py in SLOT_POS:              # all portals at y=5 → stem y=7,8 down to spine
+            for cy in range(py+2, _PATH_YS[0]):
                 set_tile(back, px, cy, ROAD)
     else:
         # Vertical spine x=20-22, horizontal branches to each portal
@@ -421,7 +418,7 @@ if __name__ == "__main__":
     # Entered from Backwoods south edge (warp patched in map) OR Farm north edge (OnWarped).
     build_hub("MultiFarm_Hub_Backwoods", exits={
         "north": ("Backwoods", 14, 38),
-        "south": ("Farm",      54,  4),
+        "south": ("Farm",      66, 15),
     })
 
     # Forest Hub — vertical spine; exits south (Forest) and north (Farm south edge).
@@ -437,9 +434,9 @@ if __name__ == "__main__":
     build_interior_template("FarmCave.tmx",  "PlayerFarmCave.tmx")
     build_interior_template("FarmHouse.tmx", "PlayerFarmHouse.tmx")
 
-    print("\nSlot portal positions (same in all 3 hubs):")
+    print("\nSlot portal positions (same in all 3 hubs, 1 row of 8 at y=5):")
     for i, (x, y) in enumerate(SLOT_POS):
-        print(f"  Slot {i+1}: ({x}, {y})")
+        print(f"  Slot {i+1}: ({x}, {y})  arrival: ({x}, {y+2})")
     print(f"\nHub entry coordinates:")
     print(f"  Farm Hub    from Farm    (west  side): ( 2, 10)")
     print(f"  Farm Hub    from BusStop (east  side): (41, 10)")
