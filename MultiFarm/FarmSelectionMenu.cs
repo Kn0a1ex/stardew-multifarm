@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using StardewValley;
 using StardewValley.Menus;
 using System;
@@ -67,6 +68,11 @@ namespace MultiFarm
                 if (col >= 4) { col = 0; y += cardH + gap; }
             }
         }
+
+        // Prevent the menu from being dismissed by any means other than selecting a farm type.
+        public override bool readyToClose() => false;
+        public override void receiveRightClick(int x, int y, bool playSound = true) { }
+        public override void receiveKeyPress(Keys key) { }
 
         public override void draw(SpriteBatch b)
         {

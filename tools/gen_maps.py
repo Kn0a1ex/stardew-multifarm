@@ -2,20 +2,20 @@
 """
 Generate hub and player farm TMX maps for the MultiFarm mod.
 
-Three hub maps, each 44×24:
+Three hub maps, each 24×20:
   MultiFarm_Hub_Farm      — between Farm (west) and BusStop (east)
   MultiFarm_Hub_Backwoods — Backwoods (north) / vanilla Farm mountain trail (south)
   MultiFarm_Hub_Forest    — Forest (south) / vanilla Farm south edge (north)
 
 Portal positions per hub (slot 1 → vanilla "Farm", slots 2-8 → MultiFarm_Farm_N):
-  Farm Hub      — west side, y=5, x=3,6,9,12,15,18,21,24 (spacing 3)
-  Backwoods Hub — south side, y=18, x=4,9,14,19,24,29,34,39 (spacing 5)
-  Forest Hub    — north side, y=5,  x=4,9,14,19,24,29,34,39 (spacing 5)
+  Farm Hub      — west side, x=2,  y=3,5,7,9,11,13,15,17  (spacing 2)
+  Backwoods Hub — south side, y=17, x=2,4,6,8,10,12,14,16 (spacing 2)
+  Forest Hub    — north side, y=2,  x=2,4,6,8,10,12,14,16 (spacing 2)
 
 Farm arrival from hub (OnWarped re-warps to correct position per hub source):
-  From Backwoods Hub → near farm top:   (spawnX, 5)   placeholder (40,  5)
-  From Forest Hub    → near farm south: (southX, H-10) placeholder (40, 55)
-  From Farm Hub      → near farm east:  (W-5, 17)      placeholder (75, 15)
+  From Backwoods Hub → near farm top:   (spawnX, 5)    placeholder (40,  5)
+  From Forest Hub    → near farm south: (southX+2, H-10) placeholder (40, 55)
+  From Farm Hub      → near farm east:  (W-3, 19)       placeholder (75, 15)
 """
 
 import os
@@ -76,9 +76,9 @@ def grid_to_csv(g):
 # hub's wall (one tile beyond these positions); the farm's opposing edge has
 # a matching warp that targets these coordinates.
 #
-# Farm Hub      (horiz spine): slots on west wall,  x=2,  y=3..17 (spacing 2)
-# Backwoods Hub (vert  spine): slots on south wall, y=21, x=4..39 (spacing 5)
-# Forest Hub    (vert  spine): slots on north wall, y=2,  x=4..39 (spacing 5)
+# All hubs 24×20. Farm Hub (horiz spine): slots on west wall, x=2, y=3..17 (spacing 2)
+# Backwoods Hub (vert spine): slots on south wall, y=17, x=2..16 (spacing 2)
+# Forest Hub    (vert spine): slots on north wall, y=2,  x=2..16 (spacing 2)
 # ---------------------------------------------------------------------------
 FARM_HUB_SLOTS = [
     (2,  3), (2,  5), (2,  7), (2,  9),
@@ -86,21 +86,21 @@ FARM_HUB_SLOTS = [
 ]
 
 BACKWOODS_HUB_SLOTS = [
-    ( 4, 21), ( 9, 21), (14, 21), (19, 21),
-    (24, 21), (29, 21), (34, 21), (39, 21),
+    ( 2, 17), ( 4, 17), ( 6, 17), ( 8, 17),
+    (10, 17), (12, 17), (14, 17), (16, 17),
 ]
 
 FOREST_HUB_SLOTS = [
-    ( 4, 2), ( 9, 2), (14, 2), (19, 2),
-    (24, 2), (29, 2), (34, 2), (39, 2),
+    ( 2, 2), ( 4, 2), ( 6, 2), ( 8, 2),
+    (10, 2), (12, 2), (14, 2), (16, 2),
 ]
 
-HUB_W, HUB_H = 44, 24
+HUB_W, HUB_H = 24, 20
 
 # E-W path rows y=9-11 (Farm Hub horizontal spine)
 _PATH_YS = range(9, 12)
-# N-S path columns x=20-22 (Backwoods / Forest Hub vertical spine)
-_PATH_XS = range(20, 23)
+# N-S path columns x=10-12 (Backwoods / Forest Hub vertical spine, centered in 24-wide hub)
+_PATH_XS = range(10, 13)
 
 
 # ---------------------------------------------------------------------------
@@ -445,15 +445,13 @@ def build_interior_template(vanilla_name, output_name):
 
 
 if __name__ == "__main__":
-    # Farm Hub — between vanilla Farm (west) and BusStop (east).
-    # Slot connections on west wall (x=2, y=3..17); no transit exit to Farm.
-    # Reduced to 24×20 so the Farm→BusStop walk is ~20 tiles instead of ~40.
-    # Harmony patch intercepts Farm↔BusStop warps and redirects through this hub.
+    # All hubs are now 24×20 (default). Farm→BusStop walk ≈20 tiles.
+    # Harmony patch intercepts Farm↔BusStop warps and redirects through Farm Hub.
     build_hub("MultiFarm_Hub_Farm", exits={
         "east": ("BusStop", 11, 23),
-    }, slot_pos=FARM_HUB_SLOTS, farm_arrival=(75, 15), w=24, h=20)
+    }, slot_pos=FARM_HUB_SLOTS, farm_arrival=(75, 15))
 
-    # Backwoods Hub — vertical spine; slot connections on south wall (y=21).
+    # Backwoods Hub — vertical spine; slot connections on south wall (y=17).
     # Transit exit removed — slot 1's south-wall opening is the host's connection.
     build_hub("MultiFarm_Hub_Backwoods", exits={
         "north": ("Backwoods", 14, 38),
@@ -461,7 +459,6 @@ if __name__ == "__main__":
 
     # Forest Hub — vertical spine; slot connections on north wall (y=2).
     # Transit exit removed — slot 1's north-wall opening is the host's connection.
-    # North-exit x fixed to 42 to match vanilla Farm south path position.
     build_hub("MultiFarm_Hub_Forest", exits={
         "south": ("Forest", 68,  1),
     }, slot_pos=FOREST_HUB_SLOTS, farm_arrival=(40, 55))
@@ -472,13 +469,13 @@ if __name__ == "__main__":
     build_interior_template("FarmCave.tmx",  "PlayerFarmCave.tmx")
     build_interior_template("FarmHouse.tmx", "PlayerFarmHouse.tmx")
 
-    print("\nSlot arrival positions per hub (wall-edge style):")
+    print("\nSlot arrival positions per hub (wall-edge style, all hubs 24×20):")
     print("  Farm Hub (west wall, x=2, y=3..17 spacing 2):")
     for i, (x, y) in enumerate(FARM_HUB_SLOTS):
         print(f"    Slot {i+1}: arrives at ({x},{y})  warp trigger:(-1,{y})")
-    print("  Backwoods Hub (south wall, y=21, x=4..39 spacing 5):")
+    print("  Backwoods Hub (south wall, y=17, x=2..16 spacing 2):")
     for i, (x, y) in enumerate(BACKWOODS_HUB_SLOTS):
-        print(f"    Slot {i+1}: arrives at ({x},{y})  warp trigger:({x},24)")
-    print("  Forest Hub (north wall, y=2, x=4..39 spacing 5):")
+        print(f"    Slot {i+1}: arrives at ({x},{y})  warp trigger:({x},{HUB_H})")
+    print("  Forest Hub (north wall, y=2, x=2..16 spacing 2):")
     for i, (x, y) in enumerate(FOREST_HUB_SLOTS):
         print(f"    Slot {i+1}: arrives at ({x},{y})  warp trigger:({x},-1)")
