@@ -36,37 +36,38 @@ namespace MultiFarm
             { 7, new Point(2, 15) }, { 8, new Point(2, 17) },
         };
 
-        // Backwoods Hub: south wall, y=17, x=2..16 spacing 2
+        // Backwoods Hub: south wall, y=17, x=3..17 spacing 2 (21-wide hub)
         private static readonly Dictionary<int, Point> SlotWarpTilesBackwoods = new()
         {
-            { 1, new Point( 2, 17) }, { 2, new Point( 4, 17) },
-            { 3, new Point( 6, 17) }, { 4, new Point( 8, 17) },
-            { 5, new Point(10, 17) }, { 6, new Point(12, 17) },
-            { 7, new Point(14, 17) }, { 8, new Point(16, 17) },
+            { 1, new Point( 3, 17) }, { 2, new Point( 5, 17) },
+            { 3, new Point( 7, 17) }, { 4, new Point( 9, 17) },
+            { 5, new Point(11, 17) }, { 6, new Point(13, 17) },
+            { 7, new Point(15, 17) }, { 8, new Point(17, 17) },
         };
 
-        // Forest Hub: north wall, y=2, x=2..16 spacing 2
+        // Forest Hub: north wall, y=2, x=3..17 spacing 2 (21-wide hub)
         private static readonly Dictionary<int, Point> SlotWarpTilesForest = new()
         {
-            { 1, new Point( 2, 2) }, { 2, new Point( 4, 2) },
-            { 3, new Point( 6, 2) }, { 4, new Point( 8, 2) },
-            { 5, new Point(10, 2) }, { 6, new Point(12, 2) },
-            { 7, new Point(14, 2) }, { 8, new Point(16, 2) },
+            { 1, new Point( 3, 2) }, { 2, new Point( 5, 2) },
+            { 3, new Point( 7, 2) }, { 4, new Point( 9, 2) },
+            { 5, new Point(11, 2) }, { 6, new Point(13, 2) },
+            { 7, new Point(15, 2) }, { 8, new Point(17, 2) },
         };
 
         // ── Hub entrance points ───────────────────────────────────────────────
-        // All hubs 24×20. Spine center x=11 (range 10-12), spine center y=10 (range 9-11).
+        // Farm Hub 24×20: spine center x=10 (range 9-11), spine center y=10 (range 9-11).
+        // Backwoods/Forest Hub 21×20: spine center x=10 (range 9-11).
         // Farm Hub — from BusStop: east spine; from Farm (slot 1): west wall slot 1 pos
         public static readonly Point HubFarmEntryFromFarm    = new( 2,  3);  // slot 1 west-wall pos
         public static readonly Point HubFarmEntryFromBusStop = new(21, 10);  // east spine (24-wide hub)
 
         // Backwoods Hub — from Backwoods: north spine y=2; from Farm (slot 1): south wall slot 1 pos
-        public static readonly Point HubBackwoodsEntryFromBackwoods = new(11,  2);
-        public static readonly Point HubBackwoodsEntryFromFarm      = new( 2, 17);  // slot 1 south-wall pos
+        public static readonly Point HubBackwoodsEntryFromBackwoods = new(10,  2);  // spine center
+        public static readonly Point HubBackwoodsEntryFromFarm      = new( 3, 17);  // slot 1 south-wall pos
 
         // Forest Hub — from Forest: south spine y=17; from Farm (slot 1): north wall slot 1 pos
-        public static readonly Point HubForestEntryFromForest = new(11, 17);
-        public static readonly Point HubForestEntryFromFarm   = new( 2,  2);  // slot 1 north-wall pos
+        public static readonly Point HubForestEntryFromForest = new(10, 17);  // spine center
+        public static readonly Point HubForestEntryFromFarm   = new( 3,  2);  // slot 1 north-wall pos
 
         public bool IsRegistered { get; private set; }
 

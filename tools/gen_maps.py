@@ -83,21 +83,23 @@ FARM_HUB_SLOTS = [
 ]
 
 BACKWOODS_HUB_SLOTS = [
-    ( 2, 17), ( 4, 17), ( 6, 17), ( 8, 17),
-    (10, 17), (12, 17), (14, 17), (16, 17),
+    ( 3, 17), ( 5, 17), ( 7, 17), ( 9, 17),
+    (11, 17), (13, 17), (15, 17), (17, 17),
 ]
 
 FOREST_HUB_SLOTS = [
-    ( 2, 2), ( 4, 2), ( 6, 2), ( 8, 2),
-    (10, 2), (12, 2), (14, 2), (16, 2),
+    ( 3, 2), ( 5, 2), ( 7, 2), ( 9, 2),
+    (11, 2), (13, 2), (15, 2), (17, 2),
 ]
 
 HUB_W, HUB_H = 24, 20
+# Backwoods/Forest hubs are narrower: 1-tile padding each side around the 8 slots
+BW_HUB_W = 21  # border(2) + pad(1) + slots x=3..17 + pad(1) + border(2)
 
 # E-W path rows y=9-11 (Farm Hub horizontal spine)
 _PATH_YS = range(9, 12)
-# N-S path columns x=10-12 (Backwoods / Forest Hub vertical spine, centered in 24-wide hub)
-_PATH_XS = range(10, 13)
+# N-S path columns x=9-11 (Backwoods/Forest vertical spine, centered in 21-wide hub)
+_PATH_XS = range(9, 12)
 
 
 # ---------------------------------------------------------------------------
@@ -442,13 +444,13 @@ if __name__ == "__main__":
     # Transit exit removed — slot 1's south-wall opening is the host's connection.
     build_hub("Custom_MultiFarm_Hub_Backwoods", exits={
         "north": ("Backwoods", 14, 38),
-    }, slot_pos=BACKWOODS_HUB_SLOTS, farm_arrival=(40, 5))
+    }, slot_pos=BACKWOODS_HUB_SLOTS, farm_arrival=(40, 5), w=BW_HUB_W)
 
     # Forest Hub — vertical spine; slot connections on north wall (y=2).
     # Transit exit removed — slot 1's north-wall opening is the host's connection.
     build_hub("Custom_MultiFarm_Hub_Forest", exits={
         "south": ("Forest", 68,  1),
-    }, slot_pos=FOREST_HUB_SLOTS, farm_arrival=(40, 55))
+    }, slot_pos=FOREST_HUB_SLOTS, farm_arrival=(40, 55), w=BW_HUB_W)
 
     for type_id in FARM_TYPE_SOURCES:
         build_player_farm(type_id)
