@@ -7,19 +7,18 @@ using System.Collections.Generic;
 namespace MultiFarm
 {
     /// <summary>
-    /// Manages the three Farm Hub locations that connect vanilla areas to
-    /// player-private farms (each hub is 44×24 tiles).
+    /// Manages the three Farm Hub locations.
     ///
-    ///   Farm Hub      ←──── vanilla Farm (west)   ────→ vanilla BusStop (east)
-    ///   Backwoods Hub ←──── vanilla Backwoods (north) / vanilla Farm north trail (south)
-    ///   Forest Hub    ←──── vanilla Forest (south) / vanilla Farm south edge (north)
+    ///   Farm Hub      — vanilla Farm (west) ↔ BusStop (east); portals on west side
+    ///   Backwoods Hub — Backwoods (north) / vanilla Farm mountain trail (south); portals south side
+    ///   Forest Hub    — Forest (south) / vanilla Farm south edge (north); portals north side
     ///
-    ///   All hubs share the same 8 portal slot positions:
-    ///     Upper row (y=5):  Slot1(6,5)  Slot2(15,5)  Slot3(24,5)  Slot4(33,5)
-    ///     Lower row (y=16): Slot5(6,16) Slot6(15,16) Slot7(24,16) Slot8(33,16)
+    /// Portal positions per hub (all hubs 44×24):
+    ///   Farm Hub      y=5,  x=3,6,9,12,15,18,21,24  hub-arrivals y=7
+    ///   Backwoods Hub y=18, x=4,9,14,19,24,29,34,39  hub-arrivals y=20
+    ///   Forest Hub    y=5,  x=4,9,14,19,24,29,34,39  hub-arrivals y=7
     ///
-    ///   Player farm top edge → Backwoods Hub (south entrance).
-    ///   Player farm south edge → Forest Hub (north entrance).
+    /// Slot 1 = vanilla "Farm" (host farm). Slots 2-8 = MultiFarm_Farm_N.
     /// </summary>
     public class FarmHubManager
     {
@@ -28,32 +27,46 @@ namespace MultiFarm
         public const string HubNameBackwoods = "MultiFarm_Hub_Backwoods";
         public const string HubNameForest    = "MultiFarm_Hub_Forest";
 
-        // ── Portal positions (identical in all 3 hubs) ────────────────────────
-        // Single row of 8 at y=5, spacing 5 tiles center-to-center.
-        // Players arriving from a player farm land at (portal.X, portal.Y + 2).
-        private static readonly Dictionary<int, Point> SlotWarpTiles = new()
+        // ── Per-hub portal positions ──────────────────────────────────────────
+        // Farm Hub: west side, y=5, spacing 3
+        private static readonly Dictionary<int, Point> SlotWarpTilesFarm = new()
         {
-            { 1, new Point( 4,  5) },
-            { 2, new Point( 9,  5) },
-            { 3, new Point(14,  5) },
-            { 4, new Point(19,  5) },
-            { 5, new Point(24,  5) },
-            { 6, new Point(29,  5) },
-            { 7, new Point(34,  5) },
-            { 8, new Point(39,  5) },
+            { 1, new Point( 3, 5) }, { 2, new Point( 6, 5) },
+            { 3, new Point( 9, 5) }, { 4, new Point(12, 5) },
+            { 5, new Point(15, 5) }, { 6, new Point(18, 5) },
+            { 7, new Point(21, 5) }, { 8, new Point(24, 5) },
         };
 
-        // ── Farm Hub entry points (horizontal hub, west+east exits) ───────────
-        public static readonly Point HubFarmEntryFromFarm    = new( 2, 10);  // from Farm west
-        public static readonly Point HubFarmEntryFromBusStop = new(41, 10);  // from BusStop east
+        // Backwoods Hub: south side, y=18, spacing 5
+        private static readonly Dictionary<int, Point> SlotWarpTilesBackwoods = new()
+        {
+            { 1, new Point( 4, 18) }, { 2, new Point( 9, 18) },
+            { 3, new Point(14, 18) }, { 4, new Point(19, 18) },
+            { 5, new Point(24, 18) }, { 6, new Point(29, 18) },
+            { 7, new Point(34, 18) }, { 8, new Point(39, 18) },
+        };
 
-        // ── Backwoods Hub entry points (vertical hub, north+south exits) ──────
-        public static readonly Point HubBackwoodsEntryFromBackwoods = new(21,  2);  // from Backwoods north
-        public static readonly Point HubBackwoodsEntryFromFarm      = new(21, 21);  // from Farm south (mountain trail)
+        // Forest Hub: north side, y=5, spacing 5
+        private static readonly Dictionary<int, Point> SlotWarpTilesForest = new()
+        {
+            { 1, new Point( 4, 5) }, { 2, new Point( 9, 5) },
+            { 3, new Point(14, 5) }, { 4, new Point(19, 5) },
+            { 5, new Point(24, 5) }, { 6, new Point(29, 5) },
+            { 7, new Point(34, 5) }, { 8, new Point(39, 5) },
+        };
 
-        // ── Forest Hub entry points (vertical hub, north+south exits) ─────────
-        public static readonly Point HubForestEntryFromForest = new(21, 21);  // from Forest south
-        public static readonly Point HubForestEntryFromFarm   = new(21,  2);  // from Farm north (south edge)
+        // ── Hub entrance points ───────────────────────────────────────────────
+        // Farm Hub (horizontal spine y=9-11)
+        public static readonly Point HubFarmEntryFromFarm    = new( 2, 10);
+        public static readonly Point HubFarmEntryFromBusStop = new(41, 10);
+
+        // Backwoods Hub (vertical spine x=20-22)
+        public static readonly Point HubBackwoodsEntryFromBackwoods = new(21,  2);
+        public static readonly Point HubBackwoodsEntryFromFarm      = new(21, 21);
+
+        // Forest Hub (vertical spine x=20-22)
+        public static readonly Point HubForestEntryFromForest = new(21, 21);
+        public static readonly Point HubForestEntryFromFarm   = new(21,  2);
 
         public bool IsRegistered { get; private set; }
 
@@ -66,10 +79,6 @@ namespace MultiFarm
             _monitor = monitor;
         }
 
-        /// <summary>
-        /// Inject all three hub GameLocations into the world.
-        /// SDV wipes Game1.locations on every save load so this must be called after each load.
-        /// </summary>
         public void RegisterLocations()
         {
             bool allPresent =
@@ -77,23 +86,19 @@ namespace MultiFarm
                 Game1.getLocationFromName(HubNameBackwoods) is not null &&
                 Game1.getLocationFromName(HubNameForest)    is not null;
 
-            if (allPresent)
-            {
-                IsRegistered = true;
-                return;
-            }
+            if (allPresent) { IsRegistered = true; return; }
 
-            foreach (var (name, mapFile) in new[]
+            foreach (var (name, _) in new[]
             {
-                (HubNameFarm,      $"Maps/{HubNameFarm}"),
-                (HubNameBackwoods, $"Maps/{HubNameBackwoods}"),
-                (HubNameForest,    $"Maps/{HubNameForest}"),
+                (HubNameFarm,      ""),
+                (HubNameBackwoods, ""),
+                (HubNameForest,    ""),
             })
             {
                 if (Game1.getLocationFromName(name) is not null) continue;
                 try
                 {
-                    var loc = new GameLocation(mapFile, name)
+                    var loc = new GameLocation($"Maps/{name}", name)
                     {
                         IsOutdoors   = true,
                         IsFarm       = false,
@@ -104,7 +109,7 @@ namespace MultiFarm
                 }
                 catch (Exception ex)
                 {
-                    _monitor.Log($"Failed to register hub location '{name}': {ex.Message}", LogLevel.Error);
+                    _monitor.Log($"Failed to register hub '{name}': {ex.Message}", LogLevel.Error);
                 }
             }
 
@@ -114,28 +119,20 @@ namespace MultiFarm
                 Game1.getLocationFromName(HubNameForest)    is not null;
         }
 
-        /// <summary>
-        /// After a save loads, redirect vanilla warps through the appropriate hub.
-        /// Farm/BusStop are handled via OnWarped (SDV 1.6 no longer stores them in location.warps).
-        /// Backwoods/Forest are patched here as a runtime fallback; AssetRequested handles reloads.
-        /// </summary>
         public void PatchVanillaWarps()
         {
             if (!ModEntry.Instance.Config.ReplaceVanillaWarps) return;
-
             try
             {
-                // Backwoods south edge → Backwoods Hub north entrance
                 PatchWarp(Game1.getLocationFromName("Backwoods"), "Farm",
                     HubNameBackwoods,
                     HubBackwoodsEntryFromBackwoods.X, HubBackwoodsEntryFromBackwoods.Y);
 
-                // Forest north edge → Forest Hub south entrance
                 PatchWarp(Game1.getLocationFromName("Forest"), "Farm",
                     HubNameForest,
                     HubForestEntryFromForest.X, HubForestEntryFromForest.Y);
 
-                _monitor.Log("Patched vanilla warps: Backwoods → BackwoodsHub, Forest → ForestHub.", LogLevel.Debug);
+                _monitor.Log("Patched vanilla warps.", LogLevel.Debug);
             }
             catch (Exception ex)
             {
@@ -143,25 +140,48 @@ namespace MultiFarm
             }
         }
 
-        /// <summary>Called when a player steps into any hub location.</summary>
         public void OnPlayerEnterHub(Farmer player, string hubName)
         {
             int slot = ModEntry.Instance.FarmManager.GetSlotForPlayer(player.Name);
             if (slot > 0)
-            {
-                _monitor.Log($"{player.Name} entered {hubName} (assigned slot {slot}).", LogLevel.Trace);
-            }
+                _monitor.Log($"{player.Name} entered {hubName} (slot {slot}).", LogLevel.Trace);
         }
 
-        /// <summary>Returns true if the given location name is one of the three hub locations.</summary>
         public static bool IsHubLocation(string? name) =>
             name == HubNameFarm || name == HubNameBackwoods || name == HubNameForest;
 
-        // ── Helpers ──────────────────────────────────────────────────────────
+        // ── Slot warp tile accessors ──────────────────────────────────────────
 
         /// <summary>
-        /// Replace an existing warp on a location with a new destination.
+        /// Returns the portal tile position for a slot in the given hub.
         /// </summary>
+        public static Point GetSlotWarpTile(int slot, string hubName)
+        {
+            var dict = hubName == HubNameBackwoods ? SlotWarpTilesBackwoods
+                     : hubName == HubNameForest    ? SlotWarpTilesForest
+                     :                               SlotWarpTilesFarm;
+            return dict.TryGetValue(slot, out var pt) ? pt : Point.Zero;
+        }
+
+        /// <summary>
+        /// Returns the portal tile position for a slot in the Farm Hub (default).
+        /// Used for rendering labels — caller should pass hub name when possible.
+        /// </summary>
+        public static Point GetSlotWarpTile(int slot) =>
+            GetSlotWarpTile(slot, HubNameFarm);
+
+        /// <summary>
+        /// Returns the hub tile where a player arriving from a player farm should land.
+        /// Lands 2 tiles past the portal so they don't immediately re-enter.
+        /// </summary>
+        public static Point GetHubArrivalForSlot(int slot, string hubName)
+        {
+            var portal = GetSlotWarpTile(slot, hubName);
+            return new Point(portal.X, portal.Y + 2);
+        }
+
+        // ── Helpers ──────────────────────────────────────────────────────────
+
         private static void PatchWarp(GameLocation location, string targetLocation,
             string newTarget, int newTargetX, int newTargetY)
         {
@@ -171,29 +191,10 @@ namespace MultiFarm
             {
                 if (warps[i].TargetName.Equals(targetLocation, StringComparison.OrdinalIgnoreCase))
                 {
-                    int srcX = warps[i].X;
-                    int srcY = warps[i].Y;
-                    warps[i] = new Warp(srcX, srcY, newTarget, newTargetX, newTargetY, flipFarmer: false);
+                    int srcX = warps[i].X, srcY = warps[i].Y;
+                    warps[i] = new Warp(srcX, srcY, newTarget, newTargetX, newTargetY, false);
                 }
             }
-        }
-
-        /// <summary>
-        /// Get the hub tile coordinate for the warp exit leading to a specific farm slot.
-        /// </summary>
-        public static Point GetSlotWarpTile(int slot)
-        {
-            return SlotWarpTiles.TryGetValue(slot, out var pt) ? pt : Point.Zero;
-        }
-
-        /// <summary>
-        /// Get the hub arrival position for a player returning from a specific farm slot.
-        /// Lands 2 tiles below the portal so players don't immediately re-enter.
-        /// </summary>
-        public static Point GetHubArrivalForSlot(int slot)
-        {
-            var portal = GetSlotWarpTile(slot);
-            return new Point(portal.X, portal.Y + 2);
         }
     }
 }

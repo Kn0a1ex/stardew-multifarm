@@ -12,12 +12,13 @@ namespace MultiFarm
     /// Manages per-player farm assignments and the private GameLocation instances.
     ///
     /// Slot numbering: 1–8 (0 = unassigned).
-    /// Each slot has:
+    /// Slot 1 = vanilla "Farm" / "FarmHouse" / "FarmCave" (host farm, no separate location needed).
+    /// Slots 2-8 each have:
     ///   - Farm:      "MultiFarm_Farm_N"      (PlayerFarm_{type}.tmx)
     ///   - Cave:      "MultiFarm_Cave_N"      (PlayerFarmCave.tmx, runtime warp patched)
     ///   - FarmHouse: "MultiFarm_FarmHouse_N" (PlayerFarmHouse.tmx, runtime warp patched)
     ///
-    /// Farm type data (cave entry tile, house door tile, spawn, map height, south-warp centre X):
+    /// Farm type data (cave entry, house door, spawn, map H/W, south-warp X):
     ///   Type 0 Standard      80×65  cave(34,5)   house(64,14)  spawn(40,5)  southX=40
     ///   Type 1 Riverland     80×65  cave(34,5)   house(64,14)  spawn(40,5)  southX=40
     ///   Type 2 Forest        80×65  cave(34,5)   house(64,14)  spawn(40,5)  southX=40
@@ -35,19 +36,19 @@ namespace MultiFarm
         private const string AssignmentsFile = "data/assignments.json";
 
         // ── Farm type data ───────────────────────────────────────────────────
-        // (tmx, caveX, caveY, houseX, houseY, spawnX, spawnY, mapH, southX)
+        // (tmx, caveX, caveY, houseX, houseY, spawnX, spawnY, mapH, southX, mapW)
         private static readonly Dictionary<int, (string tmx, int caveX, int caveY,
                                                   int houseX, int houseY,
                                                   int spawnX, int spawnY,
-                                                  int mapH, int southX)> FarmTypeData = new()
+                                                  int mapH, int southX, int mapW)> FarmTypeData = new()
         {
-            { 0, ("PlayerFarm_0.tmx", 34,  5, 64, 14, 40, 5, 65, 40) },
-            { 1, ("PlayerFarm_1.tmx", 34,  5, 64, 14, 40, 5, 65, 40) },
-            { 2, ("PlayerFarm_2.tmx", 34,  5, 64, 14, 40, 5, 65, 40) },
-            { 3, ("PlayerFarm_3.tmx", 34,  5, 64, 14, 40, 5, 65, 40) },
-            { 4, ("PlayerFarm_4.tmx", 34,  5, 64, 14, 40, 5, 65, 40) },
-            { 5, ("PlayerFarm_5.tmx", 30, 35, 64, 14, 40, 5, 80, 40) },
-            { 6, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 50, 5, 75, 52) },
+            { 0, ("PlayerFarm_0.tmx", 34,  5, 64, 14, 40, 5, 65, 40,  80) },
+            { 1, ("PlayerFarm_1.tmx", 34,  5, 64, 14, 40, 5, 65, 40,  80) },
+            { 2, ("PlayerFarm_2.tmx", 34,  5, 64, 14, 40, 5, 65, 40,  80) },
+            { 3, ("PlayerFarm_3.tmx", 34,  5, 64, 14, 40, 5, 65, 40,  80) },
+            { 4, ("PlayerFarm_4.tmx", 34,  5, 64, 14, 40, 5, 65, 40,  80) },
+            { 5, ("PlayerFarm_5.tmx", 30, 35, 64, 14, 40, 5, 80, 40,  80) },
+            { 6, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 50, 5, 75, 52, 100) },
         };
 
         private readonly IModHelper _helper;
@@ -288,22 +289,38 @@ namespace MultiFarm
 
         // ── Static helpers ────────────────────────────────────────────────────
 
-        public static string FarmName(int slot)      => $"{FarmPrefix}{slot}";
-        public static string CaveName(int slot)      => $"{CavePrefix}{slot}";
-        public static string FarmHouseName(int slot) => $"{FarmHousePrefix}{slot}";
+        // Slot 1 is the vanilla Farm, FarmHouse, and FarmCave (always present, never registered).
+        public static string FarmName(int slot)      => slot == 1 ? "Farm"      : $"{FarmPrefix}{slot}";
+        public static string CaveName(int slot)      => slot == 1 ? "FarmCave"  : $"{CavePrefix}{slot}";
+        public static string FarmHouseName(int slot) => slot == 1 ? "FarmHouse" : $"{FarmHousePrefix}{slot}";
 
         // ── Private helpers ───────────────────────────────────────────────────
 
         private static (string tmx, int caveX, int caveY, int houseX, int houseY,
-                         int spawnX, int spawnY, int mapH, int southX) GetTypeData(int farmType)
+                         int spawnX, int spawnY, int mapH, int southX, int mapW) GetTypeData(int farmType)
             => FarmTypeData.TryGetValue(farmType, out var d) ? d : FarmTypeData[0];
 
-        private (string tmx, int caveX, int caveY, int houseX, int houseY,
-                 int spawnX, int spawnY, int mapH, int southX) GetTypeDataForSlot(int slot)
+        internal (string tmx, int caveX, int caveY, int houseX, int houseY,
+                  int spawnX, int spawnY, int mapH, int southX, int mapW) GetTypeDataForSlot(int slot)
         {
             long id = _assignmentIds.TryGetValue(slot, out long eid) ? eid : 0;
             int farmType = (id != 0 && _farmTypes.TryGetValue(id, out int t)) ? t : 0;
             return GetTypeData(farmType);
+        }
+
+        /// <summary>
+        /// Returns the spawn tile and facing direction on a player's farm when arriving from
+        /// a specific hub. Called from OnWarped to redirect the placeholder arrival position.
+        /// </summary>
+        public (int x, int y, int facing) GetHubArrivalOnFarm(int slot, string fromHub)
+        {
+            var d = GetTypeDataForSlot(slot);
+            if (fromHub == FarmHubManager.HubNameBackwoods)
+                return (d.spawnX, 5, 2);              // face down — entered from north
+            if (fromHub == FarmHubManager.HubNameForest)
+                return (d.southX, d.mapH - 10, 0);    // face up   — entered from south
+            // Farm Hub (east direction)
+            return (d.mapW - 5, 17, 3);               // face left — entered from east
         }
 
         private SyncPayload BuildSyncPayload() => new()
@@ -319,10 +336,23 @@ namespace MultiFarm
         /// </summary>
         private void AssignAndWarp(Farmer farmer, int farmType)
         {
-            int openSlot = 0;
-            for (int i = 1; i <= ModEntry.Instance.Config.MaxPlayers; i++)
+            // Reuse existing slot if the player already has one (e.g. changing farm type).
+            int openSlot = GetSlotForPlayer(farmer.Name);
+
+            if (openSlot == 0)
             {
-                if (!_assignments.ContainsKey(i)) { openSlot = i; break; }
+                // Host is always slot 1; other players take the first free slot ≥ 2.
+                bool isHost = farmer.UniqueMultiplayerID == Game1.player.UniqueMultiplayerID
+                              && Context.IsMainPlayer;
+                if (isHost)
+                {
+                    openSlot = 1;
+                }
+                else
+                {
+                    for (int i = 2; i <= ModEntry.Instance.Config.MaxPlayers; i++)
+                        if (!_assignments.ContainsKey(i)) { openSlot = i; break; }
+                }
             }
 
             if (openSlot == 0)
@@ -355,6 +385,9 @@ namespace MultiFarm
 
         private void RegisterFarmLocation(int slot)
         {
+            // Slot 1 is the vanilla Farm — it always exists; nothing to register.
+            if (slot == 1) return;
+
             try
             {
                 var typeData = GetTypeDataForSlot(slot);
@@ -364,17 +397,24 @@ namespace MultiFarm
                 var farmLoc = new Farm(mapPath, FarmName(slot));
                 Game1.locations.Add(farmLoc);
 
-                var hubArrival = FarmHubManager.GetHubArrivalForSlot(slot);
+                var bwArrival   = FarmHubManager.GetHubArrivalForSlot(slot, FarmHubManager.HubNameBackwoods);
+                var forArrival  = FarmHubManager.GetHubArrivalForSlot(slot, FarmHubManager.HubNameForest);
+                var farmArrival = FarmHubManager.GetHubArrivalForSlot(slot, FarmHubManager.HubNameFarm);
 
-                // Top-edge warps → Backwoods Hub south entrance (mirrors vanilla Farm north→Backwoods)
-                for (int rx = 38; rx <= 42; rx++)
+                // North-edge warps → Backwoods Hub (mirrors vanilla Farm north→Backwoods)
+                for (int rx = typeData.spawnX - 2; rx <= typeData.spawnX + 2; rx++)
                     farmLoc.warps.Add(new Warp(rx, -1,
-                        FarmHubManager.HubNameBackwoods, hubArrival.X, hubArrival.Y, false));
+                        FarmHubManager.HubNameBackwoods, bwArrival.X, bwArrival.Y, false));
 
-                // South-edge warps → Forest Hub north entrance (mirrors vanilla Farm south→Forest)
+                // South-edge warps → Forest Hub (mirrors vanilla Farm south→Forest)
                 for (int sx = typeData.southX - 2; sx <= typeData.southX + 2; sx++)
                     farmLoc.warps.Add(new Warp(sx, typeData.mapH,
-                        FarmHubManager.HubNameForest, hubArrival.X, hubArrival.Y, false));
+                        FarmHubManager.HubNameForest, forArrival.X, forArrival.Y, false));
+
+                // East-edge warps → Farm Hub (mirrors vanilla Farm east→BusStop)
+                for (int ey = 15; ey <= 18; ey++)
+                    farmLoc.warps.Add(new Warp(typeData.mapW, ey,
+                        FarmHubManager.HubNameFarm, farmArrival.X, farmArrival.Y, false));
 
                 // Cave entrance warp
                 farmLoc.warps.Add(new Warp(

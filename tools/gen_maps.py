@@ -2,26 +2,20 @@
 """
 Generate hub and player farm TMX maps for the MultiFarm mod.
 
-Three hub maps, each 60×40:
-  MultiFarm_Hub_East   — between Farm (west) and BusStop (east); N/S exits to North/South hubs
-  MultiFarm_Hub_North  — between Backwoods (north) and East Hub (south)
-  MultiFarm_Hub_South  — between East Hub (north) and Forest (south)
+Three hub maps, each 44×24:
+  MultiFarm_Hub_Farm      — between Farm (west) and BusStop (east)
+  MultiFarm_Hub_Backwoods — Backwoods (north) / vanilla Farm mountain trail (south)
+  MultiFarm_Hub_Forest    — Forest (south) / vanilla Farm south edge (north)
 
-Each hub contains all 8 player portal slots at the same positions:
-  Slots 1-4: y=8,  x = 8, 20, 32, 44
-  Slots 5-8: y=28, x = 8, 20, 32, 44
+Portal positions per hub (slot 1 → vanilla "Farm", slots 2-8 → MultiFarm_Farm_N):
+  Farm Hub      — west side, y=5, x=3,6,9,12,15,18,21,24 (spacing 3)
+  Backwoods Hub — south side, y=18, x=4,9,14,19,24,29,34,39 (spacing 5)
+  Forest Hub    — north side, y=5,  x=4,9,14,19,24,29,34,39 (spacing 5)
 
-Hub entry coordinates (used in FarmHubManager.cs):
-  East Hub from Farm/west:      ( 2, 20)
-  East Hub from BusStop/east:   (57, 20)
-  East Hub from North Hub:      (30,  2)
-  East Hub from South Hub:      (30, 37)
-  North Hub from Backwoods:     (30,  2)
-  North Hub from East Hub:      (30, 37)
-  South Hub from East Hub:      (30,  2)
-  South Hub from Forest:        (30, 37)
-
-All tile GIDs use firstgid=16 for spring_outdoorsTileSheet (same as Backwoods.tmx).
+Farm arrival from hub (OnWarped re-warps to correct position per hub source):
+  From Backwoods Hub → near farm top:   (spawnX, 5)   placeholder (40,  5)
+  From Forest Hub    → near farm south: (southX, H-10) placeholder (40, 55)
+  From Farm Hub      → near farm east:  (W-5, 17)      placeholder (75, 15)
 """
 
 import os
@@ -75,41 +69,57 @@ def grid_to_csv(g):
     return ",\n".join(rows) + "\n"
 
 # ---------------------------------------------------------------------------
-# Hub TMX generator — 44 wide × 24 tall
-#
-# Each hub is independent and has exactly one entrance on one side:
-#   "west"  — entrance from vanilla Farm map   → FarmHub
-#   "east"  — entrance from vanilla BusStop    → BusStopHub
-#   "north" — entrance from vanilla Backwoods  → BackwoodsHub
-#   "south" — entrance from vanilla Forest     → ForestHub
-#
-# All 8 portal slots at the same positions in every hub:
-#   Row 1 (y=5):  x = 6, 15, 24, 33
-#   Row 2 (y=16): x = 6, 15, 24, 33
-#
-# Hub entry coordinates (used in FarmHubManager.cs):
-#   Farm Hub    west  entrance: arrive at ( 2, 10)
-#   BusStop Hub east  entrance: arrive at (41, 10)
-#   Backwoods Hub north entrance: arrive at (21,  2)
-#   Forest Hub  south entrance: arrive at (21, 21)
+# Per-hub portal slot positions
 # ---------------------------------------------------------------------------
-HUB_W, HUB_H = 44, 24
-
-SLOT_POS = [
-    ( 4,  5), ( 9,  5), (14,  5), (19,  5),   # slots 1-4
-    (24,  5), (29,  5), (34,  5), (39,  5),    # slots 5-8
+# Farm Hub (horizontal spine): portals on west side at y=5, spacing 3
+FARM_HUB_SLOTS = [
+    ( 3, 5), ( 6, 5), ( 9, 5), (12, 5),
+    (15, 5), (18, 5), (21, 5), (24, 5),
 ]
 
-# E-W path rows y=9-11; N-S entrance columns x=20-22 (north/south hubs)
+# Backwoods Hub (vertical spine): portals on south side at y=18, spacing 5
+BACKWOODS_HUB_SLOTS = [
+    ( 4, 18), ( 9, 18), (14, 18), (19, 18),
+    (24, 18), (29, 18), (34, 18), (39, 18),
+]
+
+# Forest Hub (vertical spine): portals on north side at y=5, spacing 5
+FOREST_HUB_SLOTS = [
+    ( 4, 5), ( 9, 5), (14, 5), (19, 5),
+    (24, 5), (29, 5), (34, 5), (39, 5),
+]
+
+HUB_W, HUB_H = 44, 24
+
+# E-W path rows y=9-11 (Farm Hub horizontal spine)
 _PATH_YS = range(9, 12)
+# N-S path columns x=20-22 (Backwoods / Forest Hub vertical spine)
 _PATH_XS = range(20, 23)
 
 
-def build_hub(hub_name, exits):
+# ---------------------------------------------------------------------------
+# Hub TMX generator — 44 wide × 24 tall
+#
+# exits: dict mapping side → (dest_map, dest_x, dest_y)
+# slot_pos: list of 8 (x, y) portal tile positions for this hub
+# farm_arrival: (x, y) tile on player farm where hub portal teleports to
+#   (placeholder — OnWarped immediately re-warps to the correct spot per hub)
+#
+# Spine direction: horizontal if any west/east exit, vertical otherwise.
+#
+# Hub entry coordinates (FarmHubManager.cs):
+#   Farm Hub      west  entrance: ( 2, 10)   east entrance: (41, 10)
+#   Backwoods Hub north entrance: (21,  2)   south entrance: (21, 21)
+#   Forest Hub    south entrance: (21, 21)   north entrance: (21,  2)
+# ---------------------------------------------------------------------------
+def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5)):
     """
-    exits: dict mapping side → (dest_map, dest_x, dest_y)
-    Example (Farm Hub): {"west": ("Farm", 79, 17), "east": ("BusStop", 11, 23)}
-    Spine direction: horizontal if any west/east exit, vertical if north/south only.
+    Build and write a hub TMX map.
+
+    exits:        dict { "west"|"east"|"north"|"south" → (dest_map, dest_x, dest_y) }
+    slot_pos:     list of 8 (tile_x, tile_y) portal positions
+    farm_arrival: (x, y) destination tile on farm when stepping into a portal
+                  (OnWarped in C# overrides this to the correct hub-direction spawn)
     """
     W, H = HUB_W, HUB_H
     has_horiz = "west" in exits or "east" in exits
@@ -127,35 +137,35 @@ def build_hub(hub_name, exits):
     set_col(back, W-2, CLIFF, 2, H-2)
     set_col(back, W-1, DARK,  2, H-2)
 
-    # Main spine + portal connectors — direction depends on exits
+    # Main spine + portal connectors
     if has_horiz:
-        # Horizontal spine y=9-11, vertical stems from each portal down to spine
+        # Farm Hub: horizontal spine y=9-11; vertical stems from portals down to spine
         for y in _PATH_YS:
             set_row(back, y, ROAD, 2, W-2)
-        for px, py in SLOT_POS:              # all portals at y=5 → stem y=7,8 down to spine
-            for cy in range(py+2, _PATH_YS[0]):
+        for px, py in slot_pos:
+            for cy in range(py+2, _PATH_YS[0]):   # y=7,8 for portals at y=5
                 set_tile(back, px, cy, ROAD)
     else:
-        # Vertical spine x=20-22, horizontal branches to each portal
+        # Backwoods/Forest Hub: vertical spine x=20-22; horizontal branches from portals
         for x in _PATH_XS:
             set_col(back, x, ROAD, 2, H-2)
-        for px, py in SLOT_POS:
-            if px < _PATH_XS[0]:             # portal left of spine → road goes right
+        for px, py in slot_pos:
+            if px < _PATH_XS[0]:                   # left of spine → branch east
                 for cx in range(px+2, _PATH_XS[0]):
                     set_tile(back, cx, py, ROAD)
-            elif px > _PATH_XS[-1]:          # portal right of spine → road goes left
+            elif px > _PATH_XS[-1]:                # right of spine → branch west
                 for cx in range(_PATH_XS[-1]+1, px-1):
                     set_tile(back, cx, py, ROAD)
 
-    # Portal patches (3×3 GRASS_C) — placed after connectors so they render on top
-    for px, py in SLOT_POS:
+    # Portal patches (3×3 GRASS_C) — drawn after connectors
+    for px, py in slot_pos:
         for dy in range(-1, 2):
             for dx in range(-1, 2):
                 nx, ny = px+dx, py+dy
                 if 2 <= nx <= W-3 and 2 <= ny <= H-3:
                     back[ny][nx] = GRASS_C
 
-    # Punch through cliff border for every exit side
+    # Punch cliff border for every exit side
     for side in exits:
         if side == "west":
             for y in _PATH_YS:
@@ -204,9 +214,15 @@ def build_hub(hub_name, exits):
         elif side == "south":
             warp_parts.append(" ".join(f"{x} {H} {dm} {dx} {dy}" for x in _PATH_XS))
 
+    # Slot 1 uses the vanilla "Farm" location; slots 2-8 use "MultiFarm_Farm_N".
+    # The farm_arrival coords are a placeholder — OnWarped in C# re-warps based on hub.
+    def _farm_dest(i):
+        name = "Farm" if i == 0 else f"MultiFarm_Farm_{i+1}"
+        return f"{name} {farm_arrival[0]} {farm_arrival[1]}"
+
     warp_parts.append(" ".join(
-        f"{px} {py} MultiFarm_Farm_{i+1} 40 5"
-        for i, (px, py) in enumerate(SLOT_POS)
+        f"{px} {py} {_farm_dest(i)}"
+        for i, (px, py) in enumerate(slot_pos)
     ))
     warp_str = " ".join(warp_parts)
 
@@ -275,14 +291,6 @@ def build_hub(hub_name, exits):
 
 # ---------------------------------------------------------------------------
 # Per-type PlayerFarm TMX generation
-#
-# Farm type IDs match Stardew Valley's internal values:
-#   0=Standard, 1=Riverland, 2=Forest, 3=Hill-top, 4=Wilderness,
-#   5=FourCorners, 6=Meadowlands/Ranching
-#
-# Each type gets its own TMX: PlayerFarm_0.tmx … PlayerFarm_6.tmx
-# The Warp property is left empty — PlayerFarmManager adds slot-specific
-# runtime warps (top-edge return to hub, cave entrance, farmhouse entrance).
 # ---------------------------------------------------------------------------
 
 FARM_TYPE_SOURCES = {
@@ -310,13 +318,11 @@ def _extract_layer(src, layer_name):
 
 
 def _extract_tilesets(src):
-    """Return the raw tileset XML blocks from a TMX source."""
     import re
     return re.findall(r'<tileset\b.*?</tileset>', src, re.DOTALL)
 
 
 def build_player_farm(type_id):
-    """Generate PlayerFarm_{type_id}.tmx from the corresponding vanilla Farm TMX."""
     import re
 
     src_name = FARM_TYPE_SOURCES[type_id]
@@ -383,17 +389,12 @@ def build_player_farm(type_id):
 
 
 def build_interior_template(vanilla_name, output_name):
-    """
-    Copy a vanilla interior TMX (FarmCave, FarmHouse) clearing its Warp property.
-    PlayerFarmManager patches Warp at runtime with slot-specific destinations.
-    """
     import re
 
     src_path = os.path.join(os.path.dirname(__file__), "..", "vanilla-maps", vanilla_name)
     with open(src_path, "r") as f:
         src = f.read()
 
-    # Clear Warp value so the runtime patch is the sole warp source
     out = re.sub(
         r'(<property name="Warp"[^>]*value=")[^"]*(")',
         r'\g<1>\g<2>',
@@ -407,26 +408,27 @@ def build_interior_template(vanilla_name, output_name):
 
 
 if __name__ == "__main__":
-    # Farm Hub — sits on the Farm↔BusStop road; exits both west (Farm) and east (BusStop).
-    # Entered from Farm east edge OR BusStop west edge (both intercepted by OnWarped).
+    # Farm Hub — between vanilla Farm (west) and BusStop (east).
+    # Portals on west side (y=5, x=3–24) so players see them immediately on entry from Farm.
+    # Farm portals → placeholder farm arrival (75, 15); OnWarped redirects to east side of farm.
     build_hub("MultiFarm_Hub_Farm", exits={
         "west": ("Farm",    79, 17),
         "east": ("BusStop", 11, 23),
-    })
+    }, slot_pos=FARM_HUB_SLOTS, farm_arrival=(75, 15))
 
-    # Backwoods Hub — vertical spine; exits north (Backwoods) and south (Farm mountain trail).
-    # Entered from Backwoods south edge (warp patched in map) OR Farm north edge (OnWarped).
+    # Backwoods Hub — vertical spine; portals on south side (y=18) so farms appear below.
+    # South exit: vanilla Farm mountain trail at (40, 5) — matches vanilla Backwoods→Farm warp.
     build_hub("MultiFarm_Hub_Backwoods", exits={
         "north": ("Backwoods", 14, 38),
-        "south": ("Farm",      66, 15),
-    })
+        "south": ("Farm",      40,  5),
+    }, slot_pos=BACKWOODS_HUB_SLOTS, farm_arrival=(40, 5))
 
-    # Forest Hub — vertical spine; exits south (Forest) and north (Farm south edge).
-    # Entered from Forest north edge (warp patched in map) OR Farm south edge (OnWarped).
+    # Forest Hub — vertical spine; portals on north side (y=5) so farms appear above.
+    # North exit: vanilla Farm south edge at (68, 63) — matches vanilla Forest→Farm warp.
     build_hub("MultiFarm_Hub_Forest", exits={
         "south": ("Forest", 68,  1),
         "north": ("Farm",   68, 63),
-    })
+    }, slot_pos=FOREST_HUB_SLOTS, farm_arrival=(40, 55))
 
     for type_id in FARM_TYPE_SOURCES:
         build_player_farm(type_id)
@@ -434,13 +436,13 @@ if __name__ == "__main__":
     build_interior_template("FarmCave.tmx",  "PlayerFarmCave.tmx")
     build_interior_template("FarmHouse.tmx", "PlayerFarmHouse.tmx")
 
-    print("\nSlot portal positions (same in all 3 hubs, 1 row of 8 at y=5):")
-    for i, (x, y) in enumerate(SLOT_POS):
-        print(f"  Slot {i+1}: ({x}, {y})  arrival: ({x}, {y+2})")
-    print(f"\nHub entry coordinates:")
-    print(f"  Farm Hub    from Farm    (west  side): ( 2, 10)")
-    print(f"  Farm Hub    from BusStop (east  side): (41, 10)")
-    print(f"  Backwoods Hub from Backwoods (north): (21,  2)")
-    print(f"  Backwoods Hub from Farm      (south): (21, 21)")
-    print(f"  Forest Hub  from Forest  (south): (21, 21)")
-    print(f"  Forest Hub  from Farm    (north): (21,  2)")
+    print("\nPortal positions per hub:")
+    print("  Farm Hub (west side, y=5, spacing 3):")
+    for i, (x, y) in enumerate(FARM_HUB_SLOTS):
+        print(f"    Slot {i+1}: ({x},{y})  hub-arrival:({x},{y+2})")
+    print("  Backwoods Hub (south side, y=18, spacing 5):")
+    for i, (x, y) in enumerate(BACKWOODS_HUB_SLOTS):
+        print(f"    Slot {i+1}: ({x},{y})  hub-arrival:({x},{y+2})")
+    print("  Forest Hub (north side, y=5, spacing 5):")
+    for i, (x, y) in enumerate(FOREST_HUB_SLOTS):
+        print(f"    Slot {i+1}: ({x},{y})  hub-arrival:({x},{y+2})")

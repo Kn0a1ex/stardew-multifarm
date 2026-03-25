@@ -136,17 +136,21 @@ namespace MultiFarm
 
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
-            // Invalidate all hub map assets so they're freshly loaded each save.
             Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameFarm}");
             Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameBackwoods}");
             Helper.GameContent.InvalidateCache($"Maps/{FarmHubManager.HubNameForest}");
             HubManager.RegisterLocations();
             FarmManager.LoadAssignments();
+
+            // Auto-assign host to slot 1 (vanilla Farm) if not yet assigned.
+            if (Context.IsMainPlayer && FarmManager.GetSlotForPlayer(Game1.player.Name) == 0)
+                FarmManager.AssignFarm(Game1.player.Name, 1, 0);
+
             FarmManager.EnsurePlayerFarmsExist();
             HubManager.PatchVanillaWarps();
 
-            // Only auto-prompt in multiplayer; single-player uses the vanilla farm system.
-            if (Context.IsMultiplayer && FarmManager.GetSlotForPlayer(Game1.player.Name) == 0)
+            // Prompt any unassigned player to choose their farm type.
+            if (FarmManager.GetSlotForPlayer(Game1.player.Name) == 0)
                 FarmManager.ShowFarmSelectionMenu(Game1.player);
         }
 
@@ -233,6 +237,27 @@ namespace MultiFarm
 
             if (FarmHubManager.IsHubLocation(e.NewLocation?.Name))
                 HubManager.OnPlayerEnterHub(e.Player, e.NewLocation!.Name);
+
+            // Hub portal → player farm: re-warp to correct spawn position based on which hub
+            // the player came from. The TMX warp uses a placeholder destination; OnWarped
+            // immediately corrects it so the player lands at the right edge of their farm.
+            if (e.Player.IsLocalPlayer && FarmHubManager.IsHubLocation(e.OldLocation?.Name))
+            {
+                string farmName = e.NewLocation?.Name ?? "";
+                bool isPlayerFarm = farmName == "Farm" ||
+                                    farmName.StartsWith(PlayerFarmManager.FarmPrefix);
+                if (isPlayerFarm)
+                {
+                    int slot = FarmManager.GetSlotForPlayer(e.Player.UniqueMultiplayerID);
+                    if (slot > 0)
+                    {
+                        var (rx, ry, rfacing) =
+                            FarmManager.GetHubArrivalOnFarm(slot, e.OldLocation!.Name);
+                        Game1.warpFarmer(farmName, rx, ry, rfacing);
+                        return;
+                    }
+                }
+            }
         }
 
         private void OnRenderedWorld(object? sender, RenderedWorldEventArgs e)
@@ -242,9 +267,10 @@ namespace MultiFarm
             if (!FarmHubManager.IsHubLocation(Game1.currentLocation?.Name)) return;
 
             SpriteBatch b = e.SpriteBatch;
+            string currentHub = Game1.currentLocation?.Name ?? "";
             foreach (var (slot, name) in FarmManager.GetAssignments())
             {
-                var portal = FarmHubManager.GetSlotWarpTile(slot);
+                var portal = FarmHubManager.GetSlotWarpTile(slot, currentHub);
                 if (portal == Point.Zero) continue;
 
                 // Center the label over the portal tile (one tile above it)
