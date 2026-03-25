@@ -108,8 +108,25 @@ namespace MultiFarm
         /// <summary>Returns the slot number for a player by ID, or 0 if unassigned.</summary>
         public int GetSlotForPlayer(long multiplayerId)
         {
+            // Primary: ID-based lookup (set when AssignFarm finds the player in getAllFarmers).
             foreach (var kv in _assignmentIds)
                 if (kv.Value == multiplayerId) return kv.Key;
+
+            // Fallback: ID wasn't stored (AssignFarm ran before the farmer was in getAllFarmers).
+            // Cross-reference via name and opportunistically cache the ID.
+            var farmer = Game1.getAllFarmers()
+                .FirstOrDefault(f => f.UniqueMultiplayerID == multiplayerId);
+            if (farmer != null)
+            {
+                foreach (var kv in _assignments)
+                {
+                    if (kv.Value == farmer.Name)
+                    {
+                        _assignmentIds[kv.Key] = multiplayerId;
+                        return kv.Key;
+                    }
+                }
+            }
             return 0;
         }
 
@@ -318,9 +335,9 @@ namespace MultiFarm
             if (fromHub == FarmHubManager.HubNameBackwoods)
                 return (d.spawnX, 5, 2);                  // face down — entered from north
             if (fromHub == FarmHubManager.HubNameForest)
-                return (d.southX + 2, d.mapH - 4, 0);     // face up   — entered from south (near south edge, avoids inland water)
-            // Farm Hub (east direction): +2 south, +2 east per user fix
-            return (d.mapW - 3, 19, 3);                   // face left — entered from east
+                return (d.southX + 2, d.mapH - 2, 0);     // face up   — 2 tiles from south edge, on the forest path
+            // Farm Hub: arrive near east edge where the BusStop path connects
+            return (d.mapW - 2, 17, 3);                   // face left — entered from east
         }
 
         private SyncPayload BuildSyncPayload() => new()
