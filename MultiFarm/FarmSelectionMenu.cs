@@ -136,20 +136,21 @@ namespace MultiFarm
 
         private static string WrapText(string text, int maxWidth)
         {
-            // Very basic word-wrap for the card descriptions
             var words  = text.Split(' ');
             var result = new System.Text.StringBuilder();
             var line   = new System.Text.StringBuilder();
             foreach (var word in words)
             {
-                if ((line.Length + word.Length + 1) * 7 > maxWidth)
+                string candidate = line.Length == 0 ? word : line + " " + word;
+                if (Game1.tinyFont.MeasureString(candidate).X > maxWidth)
                 {
                     result.AppendLine(line.ToString().TrimEnd());
                     line.Clear();
                 }
-                line.Append(word).Append(' ');
+                if (line.Length > 0) line.Append(' ');
+                line.Append(word);
             }
-            result.Append(line);
+            if (line.Length > 0) result.Append(line);
             return result.ToString();
         }
 

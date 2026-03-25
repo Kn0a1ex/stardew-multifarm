@@ -57,6 +57,9 @@ namespace MultiFarm
         // player display name → farm type ID chosen at setup
         private Dictionary<string, int> _farmTypes = new();
 
+        // players who have already received starter items this session
+        private readonly HashSet<string> _starterItemsGiven = new();
+
         public PlayerFarmManager(IModHelper helper, IMonitor monitor)
         {
             _helper  = helper;
@@ -142,7 +145,7 @@ namespace MultiFarm
         /// </summary>
         public void OnFarmTypeChosen(Farmer player, int farmType)
         {
-            if (Game1.IsMasterGame)
+            if (Context.IsMainPlayer)
             {
                 AssignAndWarp(player.Name, farmType);
             }
@@ -192,22 +195,16 @@ namespace MultiFarm
         /// </summary>
         public void OnPeerConnected(IMultiplayerPeer peer)
         {
-            // Send the current assignment table so the client can register locations
+            // Send the current assignment table so the client can register locations.
+            // NOTE: farmer data (getAllFarmers) is not yet available at PeerConnected time.
+            // The client's own SaveLoaded handler will show the selection menu if needed;
+            // this sync just ensures they have up-to-date assignment data on arrival.
             _helper.Multiplayer.SendMessage(
                 message:    new SyncPayload { Assignments = _assignments, FarmTypes = _farmTypes },
                 messageType: ModEntry.MsgSyncAssignments,
                 modIDs:     new[] { _helper.ModRegistry.ModID },
                 playerIDs:  new[] { peer.PlayerID }
             );
-
-            var player = Game1.getAllFarmers().FirstOrDefault(f => f.UniqueMultiplayerID == peer.PlayerID);
-            if (player is null) return;
-
-            if (GetSlotForPlayer(player.Name) == 0)
-            {
-                _monitor.Log($"{player.Name} has no farm — prompting selection.", LogLevel.Info);
-                PromptFarmSelection(player);
-            }
         }
 
         /// <summary>Warp a farmer directly to a specific slot's farm location.</summary>
@@ -222,7 +219,7 @@ namespace MultiFarm
             string playerName = _assignments.TryGetValue(slot, out var n) ? n : "";
             int farmType = _farmTypes.TryGetValue(playerName, out int t) ? t : 0;
             var data = GetTypeData(farmType);
-            Game1.warpFarmer(locName, data.spawnX, data.spawnY, facingDirectionAfterWarp: 2);
+            Game1.warpFarmer(locName, data.spawnX, data.spawnY, 2);
         }
 
         /// <summary>
@@ -312,12 +309,13 @@ namespace MultiFarm
             AssignFarm(playerName, openSlot, farmType);
             _monitor.Log($"Assigned {playerName} to slot {openSlot} (type {farmType}).", LogLevel.Info);
 
-            // Warp the player to their new farm
+            // Warp the player to their new farm and give first-time starter items
             var farmer = Game1.getAllFarmers().FirstOrDefault(f => f.Name == playerName);
             if (farmer != null)
             {
                 WarpToFarm(farmer, openSlot);
-                GiveStarterItems(farmer);
+                if (_starterItemsGiven.Add(playerName))
+                    GiveStarterItems(farmer);
                 Game1.chatBox?.addMessage(
                     $"MultiFarm: Welcome to your farm, {playerName}! Head to the Farm Hub to explore.",
                     Microsoft.Xna.Framework.Color.Green);
