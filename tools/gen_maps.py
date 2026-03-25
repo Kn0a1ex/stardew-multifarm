@@ -118,7 +118,7 @@ _PATH_XS = range(20, 23)
 #   Backwoods Hub north entrance: (21,  2)   south entrance: (21, 21)
 #   Forest Hub    south entrance: (21, 21)   north entrance: (21,  2)
 # ---------------------------------------------------------------------------
-def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5)):
+def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5), w=HUB_W, h=HUB_H):
     """
     Build and write a hub TMX map.
 
@@ -126,8 +126,9 @@ def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5)):
     slot_pos:     list of 8 (tile_x, tile_y) portal positions
     farm_arrival: (x, y) destination tile on farm when stepping into a portal
                   (OnWarped in C# overrides this to the correct hub-direction spawn)
+    w, h:         map dimensions (default HUB_W×HUB_H)
     """
-    W, H = HUB_W, HUB_H
+    W, H = w, h
     has_horiz = "west" in exits or "east" in exits
 
     # ── BACK layer ─────────────────────────────────────────────────────────
@@ -266,10 +267,10 @@ def build_hub(hub_name, exits, slot_pos, farm_arrival=(40, 5)):
 <map version="1.4" tiledversion="1.4.2" orientation="orthogonal" renderorder="right-down" compressionlevel="0" width="{W}" height="{H}" tilewidth="16" tileheight="16" infinite="0" nextlayerid="9" nextobjectid="1">
   <properties>
     <property name="Outdoors" type="bool" value="True" />
-    <property name="Fall_Objects" type="string" value="T" />
-    <property name="Spring_Objects" type="string" value="T" />
-    <property name="Summer_Objects" type="string" value="T" />
-    <property name="Winter_Objects" type="string" value="T" />
+    <property name="Fall_Objects" type="string" value="F" />
+    <property name="Spring_Objects" type="string" value="F" />
+    <property name="Summer_Objects" type="string" value="F" />
+    <property name="Winter_Objects" type="string" value="F" />
     <property name="Warp" type="string" value="{warp_str}" />
   </properties>
   <tileset firstgid="1" name="monsterGraveTiles" tilewidth="16" tileheight="16" tilecount="15" columns="3">
@@ -445,25 +446,24 @@ def build_interior_template(vanilla_name, output_name):
 
 if __name__ == "__main__":
     # Farm Hub — between vanilla Farm (west) and BusStop (east).
-    # Slot connections on west wall (x=2, y=3..17); no separate transit exit to Farm —
-    # slot 1 IS vanilla Farm, so the slot 1 west-wall opening is the host's connection.
-    # OnWarped intercepts Farm→BusStop and redirects to slot 1's arrival position.
+    # Slot connections on west wall (x=2, y=3..17); no transit exit to Farm.
+    # Reduced to 24×20 so the Farm→BusStop walk is ~20 tiles instead of ~40.
+    # Harmony patch intercepts Farm↔BusStop warps and redirects through this hub.
     build_hub("MultiFarm_Hub_Farm", exits={
         "east": ("BusStop", 11, 23),
-    }, slot_pos=FARM_HUB_SLOTS, farm_arrival=(75, 15))
+    }, slot_pos=FARM_HUB_SLOTS, farm_arrival=(75, 15), w=24, h=20)
 
     # Backwoods Hub — vertical spine; slot connections on south wall (y=21).
-    # South transit exit to vanilla Farm remains for pass-through.
+    # Transit exit removed — slot 1's south-wall opening is the host's connection.
     build_hub("MultiFarm_Hub_Backwoods", exits={
         "north": ("Backwoods", 14, 38),
-        "south": ("Farm",      40,  5),
     }, slot_pos=BACKWOODS_HUB_SLOTS, farm_arrival=(40, 5))
 
     # Forest Hub — vertical spine; slot connections on north wall (y=2).
-    # North transit exit to vanilla Farm south path at (40, 63).
+    # Transit exit removed — slot 1's north-wall opening is the host's connection.
+    # North-exit x fixed to 42 to match vanilla Farm south path position.
     build_hub("MultiFarm_Hub_Forest", exits={
         "south": ("Forest", 68,  1),
-        "north": ("Farm",   40, 63),
     }, slot_pos=FOREST_HUB_SLOTS, farm_arrival=(40, 55))
 
     for type_id in FARM_TYPE_SOURCES:

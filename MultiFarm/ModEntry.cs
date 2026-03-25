@@ -63,9 +63,7 @@ namespace MultiFarm
 
         private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
         {
-            // Serve all four hub maps through SMAPI's content pipeline.
-            // The Maps/ prefix ensures SDV fully initialises the location,
-            // fixing the Ghost Warp bug (black screen / no arrival).
+            // Serve all hub maps through SMAPI's content pipeline.
             foreach (var hubName in new[] {
                 FarmHubManager.HubNameFarm,
                 FarmHubManager.HubNameBackwoods,
@@ -81,8 +79,11 @@ namespace MultiFarm
 
             if (!Config.ReplaceVanillaWarps) return;
 
-            // Patch vanilla map Warp properties at asset-load time so they survive
-            // map reloads (unlike runtime PatchVanillaWarps which runs only once).
+            // Redirect vanilla map Warp properties at asset-load time so warps survive
+            // map reloads and never show the intermediate location before the hub.
+            //
+            // Backwoods→Farm and Forest→Farm: redirect the return warps so leaving
+            // those maps brings you to the correct hub, not vanilla Farm.
             if (e.NameWithoutLocale.IsEquivalentTo("Maps/Backwoods"))
                 e.Edit(asset => RedirectMapWarps(asset, "Farm",
                     FarmHubManager.HubNameBackwoods,
@@ -94,6 +95,25 @@ namespace MultiFarm
                     FarmHubManager.HubNameForest,
                     FarmHubManager.HubForestEntryFromForest.X,
                     FarmHubManager.HubForestEntryFromForest.Y), AssetEditPriority.Default);
+
+            // Farm→Backwoods and Farm→Forest: redirect the vanilla Farm's edge warps
+            // so the host (slot 1) enters the correct hub directly.  Non-host farms
+            // have their own warps added at runtime in RegisterFarmLocation.
+            if (e.NameWithoutLocale.IsEquivalentTo("Maps/Farm"))
+                e.Edit(asset =>
+                {
+                    RedirectMapWarps(asset, "Backwoods",
+                        FarmHubManager.HubNameBackwoods,
+                        FarmHubManager.HubBackwoodsEntryFromFarm.X,
+                        FarmHubManager.HubBackwoodsEntryFromFarm.Y);
+                    RedirectMapWarps(asset, "Forest",
+                        FarmHubManager.HubNameForest,
+                        FarmHubManager.HubForestEntryFromFarm.X,
+                        FarmHubManager.HubForestEntryFromFarm.Y);
+                }, AssetEditPriority.Default);
+
+            // Farm↔BusStop: hardcoded in SDV 1.6 — intercepted by WarpInterceptPatch
+            // (Harmony prefix on Game1.warpFarmer) so no asset edit is possible here.
         }
 
         /// <summary>
@@ -196,44 +216,11 @@ namespace MultiFarm
         {
             if (!Config.ReplaceVanillaWarps) return;
 
-            // In SDV 1.6, Farm↔BusStop warps are no longer stored in location.warps,
-            // so PatchVanillaWarps can't replace them. Intercept after the vanilla warp
-            // fires and immediately redirect the player to the correct hub.
-            if (e.Player.IsLocalPlayer)
-            {
-                // Farm east edge → Farm Hub west entrance
-                if (e.NewLocation?.Name == "BusStop" && e.OldLocation?.Name == "Farm")
-                {
-                    Game1.warpFarmer(FarmHubManager.HubNameFarm,
-                        FarmHubManager.HubFarmEntryFromFarm.X,
-                        FarmHubManager.HubFarmEntryFromFarm.Y, 1);
-                    return;
-                }
-                // BusStop west edge → Farm Hub east entrance
-                if (e.NewLocation?.Name == "Farm" && e.OldLocation?.Name == "BusStop")
-                {
-                    Game1.warpFarmer(FarmHubManager.HubNameFarm,
-                        FarmHubManager.HubFarmEntryFromBusStop.X,
-                        FarmHubManager.HubFarmEntryFromBusStop.Y, 3);
-                    return;
-                }
-                // Farm north trail → Backwoods Hub south entrance
-                if (e.NewLocation?.Name == "Backwoods" && e.OldLocation?.Name == "Farm")
-                {
-                    Game1.warpFarmer(FarmHubManager.HubNameBackwoods,
-                        FarmHubManager.HubBackwoodsEntryFromFarm.X,
-                        FarmHubManager.HubBackwoodsEntryFromFarm.Y, 2);
-                    return;
-                }
-                // Farm south edge → Forest Hub north entrance
-                if (e.NewLocation?.Name == "Forest" && e.OldLocation?.Name == "Farm")
-                {
-                    Game1.warpFarmer(FarmHubManager.HubNameForest,
-                        FarmHubManager.HubForestEntryFromFarm.X,
-                        FarmHubManager.HubForestEntryFromFarm.Y, 0);
-                    return;
-                }
-            }
+            // Note: vanilla Farm↔BusStop/Backwoods/Forest warp interception is now
+            // handled upstream without double-warp:
+            //   Farm↔BusStop     → WarpInterceptPatch (Harmony prefix on Game1.warpFarmer)
+            //   Farm↔Backwoods   → OnAssetRequested edit on Maps/Farm + Maps/Backwoods
+            //   Farm↔Forest      → OnAssetRequested edit on Maps/Farm + Maps/Forest
 
             if (FarmHubManager.IsHubLocation(e.NewLocation?.Name))
                 HubManager.OnPlayerEnterHub(e.Player, e.NewLocation!.Name);

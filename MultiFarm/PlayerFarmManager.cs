@@ -316,11 +316,11 @@ namespace MultiFarm
         {
             var d = GetTypeDataForSlot(slot);
             if (fromHub == FarmHubManager.HubNameBackwoods)
-                return (d.spawnX, 5, 2);              // face down — entered from north
+                return (d.spawnX, 5, 2);                  // face down — entered from north
             if (fromHub == FarmHubManager.HubNameForest)
-                return (d.southX, d.mapH - 10, 0);    // face up   — entered from south
-            // Farm Hub (east direction)
-            return (d.mapW - 5, 17, 3);               // face left — entered from east
+                return (d.southX + 2, d.mapH - 10, 0);    // face up   — entered from south (+2 east per user fix)
+            // Farm Hub (east direction): +2 south, +2 east per user fix
+            return (d.mapW - 3, 19, 3);                   // face left — entered from east
         }
 
         private SyncPayload BuildSyncPayload() => new()

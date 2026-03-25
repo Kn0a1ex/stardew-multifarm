@@ -57,8 +57,9 @@ namespace MultiFarm
 
         // ── Hub entrance points ───────────────────────────────────────────────
         // Farm Hub — from BusStop: east wall spine; from Farm (slot 1): west wall slot 1 pos
+        // Hub is 24 wide: east inner position = W-3 = 21
         public static readonly Point HubFarmEntryFromFarm    = new( 2,  3);  // slot 1 west-wall pos
-        public static readonly Point HubFarmEntryFromBusStop = new(41, 10);
+        public static readonly Point HubFarmEntryFromBusStop = new(21, 10);  // east spine (24-wide hub)
 
         // Backwoods Hub — from Backwoods: north spine; from Farm (slot 1): south wall slot 1 pos
         public static readonly Point HubBackwoodsEntryFromBackwoods = new(21,  2);
