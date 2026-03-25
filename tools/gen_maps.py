@@ -206,9 +206,6 @@ def build_hub(hub_name, north_warp, south_warp, west_warp=None, east_warp=None):
         for px in NS_XS:
             set_tile(back, px, py, ROAD)
 
-    # ── BUILDINGS layer ─────────────────────────────────────────────────────
-    buildings = make_grid(W, H, EMPTY)
-
     # ── PATHS layer ─────────────────────────────────────────────────────────
     # Forage spawns are driven by the Back layer's GRASS_S tiles (GID 166)
     # which have the Spawnable property defined in the tileset. No extra
@@ -238,6 +235,7 @@ def build_hub(hub_name, north_warp, south_warp, west_warp=None, east_warp=None):
         (5, 33), (24,33), (37,34), (50,33),
     ]
     NS_CENTER = 30
+    placed_trees = []
     for tx, ty in TREES:
         if PATH_Y1-3 <= ty+3 and ty <= PATH_Y2+3:
             continue
@@ -250,6 +248,22 @@ def build_hub(hub_name, north_warp, south_warp, west_warp=None, east_warp=None):
         if overlap:
             continue
         place_tree(front, tx, ty)
+        placed_trees.append((tx, ty))
+
+    # ── BUILDINGS layer — collision ──────────────────────────────────────────
+    # In SDV outdoor maps, ANY non-zero tile in Buildings = impassable.
+    # GID 118 = standard outdoor collision; GID 141 = tree trunk collision.
+    IMPASSABLE_BACK = {CLIFF, DARK, CLIFF_L}
+    buildings = make_grid(W, H, EMPTY)
+    for y in range(H):
+        for x in range(W):
+            if back[y][x] in IMPASSABLE_BACK:
+                buildings[y][x] = 118
+    # Tree trunks: bottom 2 rows of each 3×4 tree (dy=2 and dy=3)
+    for tx, ty in placed_trees:
+        for dy in (2, 3):
+            for dx in range(3):
+                set_tile(buildings, tx+dx, ty+dy, 141)
 
     # ── AlwaysFront layer ───────────────────────────────────────────────────
     alwaysfront = make_grid(W, H, EMPTY)
