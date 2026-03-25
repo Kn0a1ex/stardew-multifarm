@@ -209,13 +209,11 @@ def build_hub(hub_name, north_warp, south_warp, west_warp=None, east_warp=None):
     # ── BUILDINGS layer ─────────────────────────────────────────────────────
     buildings = make_grid(W, H, EMPTY)
 
-    # ── PATHS layer (forage spawns) ─────────────────────────────────────────
+    # ── PATHS layer ─────────────────────────────────────────────────────────
+    # Forage spawns are driven by the Back layer's GRASS_S tiles (GID 166)
+    # which have the Spawnable property defined in the tileset. No extra
+    # Paths layer markers needed.
     paths = make_grid(W, H, EMPTY)
-    FORAGE = 2017
-    for y in range(4, 36):
-        for x in range(4, W-4):
-            if back[y][x] == GRASS_S and random.random() < 0.08:
-                paths[y][x] = FORAGE
 
     # ── FRONT layer — cliff face + trees ────────────────────────────────────
     front = make_grid(W, H, EMPTY)
