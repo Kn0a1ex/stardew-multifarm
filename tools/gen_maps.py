@@ -425,7 +425,6 @@ def build_player_farm(type_id):
     ]
     layers_xml = "\n".join(layer_blocks)
     next_layer_id = max(layer_ids[n] for n in layers) + 1
-    next_obj_id   = next_layer_id + 5  # object groups come after
 
     tmx = (
         f'<?xml version="1.0"?>\n'

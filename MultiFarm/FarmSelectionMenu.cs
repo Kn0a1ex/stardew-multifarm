@@ -33,7 +33,7 @@ namespace MultiFarm
             ("Hill-top",     "Rocky terrain with a quarry for mining.",                 3),
             ("Wilderness",   "Monsters roam at night. For the adventurous.",            4),
             ("Four Corners", "Four distinct sections with varied resources.",            5),
-            ("Beach",        "Sandy and ocean-adjacent. Unique crop rules apply.",      6),
+            ("Meadowlands",  "Wide open pastures. Perfect for animal farming.",         6),
         };
 
         public FarmSelectionMenu(Farmer player, Action<int> onSelected)

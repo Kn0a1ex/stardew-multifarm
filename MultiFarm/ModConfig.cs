@@ -12,7 +12,7 @@ namespace MultiFarm
         /// Farm types players can choose from.
         /// Maps to Stardew's internal farm type IDs:
         ///   0 = Standard, 1 = Riverland, 2 = Forest, 3 = Hill-top,
-        ///   4 = Wilderness, 5 = Four Corners, 6 = Beach
+        ///   4 = Wilderness, 5 = Four Corners, 6 = Meadowlands
         /// </summary>
         public int[] AllowedFarmTypes { get; set; } = { 0, 1, 2, 3, 4, 5, 6 };
 
