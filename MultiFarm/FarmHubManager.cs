@@ -13,7 +13,7 @@ namespace MultiFarm
     /// the vanilla Farm and BusStop (FarmHub.tmx, 60×40).
     ///
     /// Map layout:
-    ///   [Farm] ←─── E-W path (y=18-22) ───→ [BusStop]
+    ///   [Farm] ←─── E-W path (y=17-22) ───→ [BusStop]
     ///
     ///   Upper portals (y=8):  Slot1(8,8)  Slot2(20,8)  Slot3(32,8)  Slot4(44,8)
     ///   Lower portals (y=28): Slot5(8,28) Slot6(20,28) Slot7(32,28) Slot8(44,28)

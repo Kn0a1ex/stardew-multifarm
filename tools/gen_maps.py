@@ -2,164 +2,260 @@
 """
 Generate FarmHub.tmx and PlayerFarm.tmx for the MultiFarm mod.
 
-Tile GID reference (firstgid=16 for spring_outdoorsTileSheet, same as Backwoods):
-  367 = dark forest/cliff fill (tile 351)
-  396 = cliff border fill (tile 380)
-  373 = cliff-to-grass left edge (tile 357)
-  421 = grass/open ground (tile 405)
-  422 = grass variant (tile 406)
-  423 = grass variant (tile 407)
-  191 = open grass interior (tile 175)
-  166 = spawnable grass (tile 150)
-  272 = water/path horizontal (tile 256)
-  270 = water channel (tile 254)
+All tile GIDs use firstgid=16 for spring_outdoorsTileSheet (same as Backwoods.tmx).
+GID = sheet_tile_index + 16.
 
-Portal slot positions (hub-relative):
+Verified tile references (confirmed from vanilla map tile data):
+  367 (sheet 351) = dark fill outside cliff
+  396 (sheet 380) = solid cliff / rock fill
+  373 (sheet 357) = cliff-to-grass left edge transition
+  421 (sheet 405) = grass inner (near cliff edge)
+  422 (sheet 406) = grass B
+  423 (sheet 407) = grass C  — used as portal patch marker
+  191 (sheet 175) = main open grass
+  166 (sheet 150) = spawnable grass
+  316 (sheet 300) = dark grass / shadow near cliff
+  320 (sheet 304) = dark grass variant
+  169 (sheet 153) = dirt road main tile   (BusStop y=23 row at sheet 153)
+  392 (sheet 376) = road north edge / cliff corner (BusStop y=21, sheet 376)
+  342 (sheet 326) = road south edge      (BusStop y=25, sheet 326)
+  370 (sheet 354) = rock bottom-left
+  371 (sheet 355) = rock bottom-center
+  372 (sheet 356) = rock bottom-right
+
+Front layer (same firstgid=16 outdoor sheet):
+  Cliff face tiles (top-left corner diagonal, from Backwoods):
+    962(946), 956(940), 957(941), 982(966), 1008(992), 981(965)
+  Tree tiles (3-wide × 4-tall):
+    Row 0: 26(10), 27(11), 28(12)
+    Row 1: 51(35), 52(36), 53(37)
+    Row 2: 76(60), 77(61), 78(62)
+    Row 3: 101(85), 102(86), 103(87)
+  Small shrub (2-wide):
+    Top: 104(88), 105(89)  — single-row shrub or tree top
+
+Portal slot positions:
   Slots 1-4: y=8,  x = 8, 20, 32, 44
   Slots 5-8: y=28, x = 8, 20, 32, 44
 
-Farm entry  (left):  x=-1, y=18-21  -> Farm 79 17
-BusStop exit (right): x=60, y=18-21 -> BusStop 11 23
+Warp connections:
+  Left  (x=-1, y=17-22) -> Farm 79 17
+  Right (x=60, y=17-22) -> BusStop 11 23
+  Slot portals (px,py)  -> MultiFarm_Farm_N at (40, 5)
 """
 
-import os
+import os, random
+
+random.seed(42)   # deterministic output
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "MultiFarm", "assets", "maps")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# Tile GID constants (firstgid=16 for outdoor sheet, like Backwoods)
+# Back-layer tile constants (firstgid=16 for outdoor sheet)
 # ---------------------------------------------------------------------------
-CLIFF     = 396   # solid cliff border
-CLIFF_NW  = 367   # dark corner/forest fill (outside cliff)
-CLIFF_L   = 373   # cliff left edge transition to grass
-GRASS_A   = 421   # open grass A
-GRASS_B   = 422   # open grass B
-GRASS_C   = 423   # open grass C
-GRASS     = 191   # interior open grass
-GRASS_S   = 166   # spawnable grass (slightly different visual)
-DIRT      = 304   # dirt path (from Backwoods row 23 area: 304-16=288 in sheet)
-EMPTY     = 0
+CLIFF    = 396   # solid cliff fill
+DARK     = 367   # dark outside-cliff fill
+CLIFF_L  = 373   # cliff→grass left-edge
+GRASS_A  = 421   # grass near cliff
+GRASS_B  = 422   # grass B
+GRASS_C  = 423   # grass C  (portal patch)
+GRASS    = 191   # main interior grass
+GRASS_S  = 166   # spawnable grass
+G_DARK   = 320   # darker grass / shadow
+G_SHADE  = 316   # shadow grass near cliff
+ROAD     = 169   # dirt road main tile
+ROAD_N   = 392   # road north edge (grass→road)
+ROAD_S   = 342   # road south edge (road→grass)
+EMPTY    = 0
 
+# ---------------------------------------------------------------------------
+# Front-layer tile constants
+# ---------------------------------------------------------------------------
+CF = [962, 962, 956, 956, 957, 982]   # cliff face top row
+CF1= [962, 956, 956, 957, 982, 1008]
+CF2= [962, 956, 957, 982, 1008,    0]
+CF3= [956, 981, 982, 1008,   0,    0]
+CF4= [957, 982, 1008,   0,   0,    0]
+CF5= [982, 1008,   0,   0,   0,    0]
+CF6= [1008,  0,   0,   0,   0,    0]
+CLIFF_FACE_ROWS = [CF, CF1, CF2, CF3, CF4, CF5, CF6]   # 7 rows
 
-def make_grid(w, h, default=GRASS):
-    return [[default] * w for _ in range(h)]
+# Tree (3-wide × 4-tall): call place_tree(front, x, y) to place
+TREE_ROWS = [[26,27,28],[51,52,53],[76,77,78],[101,102,103]]
 
+# ---------------------------------------------------------------------------
+# Grid helpers
+# ---------------------------------------------------------------------------
+def make_grid(w, h, default=EMPTY):
+    return [[default]*w for _ in range(h)]
 
-def set_row(grid, y, tile):
-    for x in range(len(grid[y])):
-        grid[y][x] = tile
+def set_tile(g, x, y, t):
+    if 0 <= x < len(g[0]) and 0 <= y < len(g):
+        g[y][x] = t
 
+def set_row(g, y, t, x0=0, x1=None):
+    if x1 is None: x1 = len(g[0])
+    for x in range(x0, x1): set_tile(g, x, y, t)
 
-def set_col(grid, x, tile, y_start=0, y_end=None):
-    h = len(grid)
-    if y_end is None:
-        y_end = h
-    for y in range(y_start, y_end):
-        grid[y][x] = tile
+def set_col(g, x, t, y0=0, y1=None):
+    if y1 is None: y1 = len(g)
+    for y in range(y0, y1): set_tile(g, x, y, t)
 
-
-def set_rect(grid, x0, y0, x1, y1, tile):
+def set_rect(g, x0, y0, x1, y1, t):
     for y in range(y0, y1):
-        for x in range(x0, x1):
-            grid[y][x] = tile
+        for x in range(x0, x1): set_tile(g, x, y, t)
 
+def place_tree(g, x, y):
+    """Place a 3×4 tree at (x,y) top-left in the Front layer."""
+    for dy, row in enumerate(TREE_ROWS):
+        for dx, t in enumerate(row):
+            set_tile(g, x+dx, y+dy, t)
 
-def csv_row(row):
-    return ",".join(str(t) for t in row)
-
-
-def grid_to_csv(grid):
-    return "\n".join(csv_row(row) + "," for row in grid)
-
+def csv_row(row): return ",".join(str(t) for t in row)
+def grid_to_csv(g): return "\n".join(csv_row(row)+"," for row in g)
 
 # ---------------------------------------------------------------------------
-# FarmHub.tmx  (60 wide x 40 tall)
+# FarmHub.tmx  (60 wide × 40 tall)
 # ---------------------------------------------------------------------------
 def build_farmhub():
     W, H = 60, 40
+    SLOT_POS = [
+        ( 8,  8), (20,  8), (32,  8), (44,  8),   # slots 1-4
+        ( 8, 28), (20, 28), (32, 28), (44, 28),    # slots 5-8
+    ]
+    PATH_Y1, PATH_Y2 = 17, 22   # E-W path rows (inclusive): road_N + 3 road + road_S
 
-    # --- BACK layer ---
+    # ── BACK layer ─────────────────────────────────────────────────────────
     back = make_grid(W, H, GRASS)
 
-    # Top border rows 0-1
-    set_row(back, 0, CLIFF)
-    for x in range(W):
-        back[1][x] = CLIFF_L if x == 0 else (CLIFF if x >= W-2 else GRASS_A)
-    back[1][0]   = CLIFF_L
-    back[1][W-1] = CLIFF
-    back[1][W-2] = CLIFF
+    # Outer cliff top/bottom (rows 0-1 and 38-39)
+    for y in (0, 1, 38, 39):
+        set_row(back, y, CLIFF)
+        set_tile(back, 0, y, DARK)
+        set_tile(back, W-1, y, DARK)
 
-    # Bottom border rows 38-39
-    set_row(back, 39, CLIFF)
-    for x in range(W):
-        back[38][x] = CLIFF_L if x == 0 else (CLIFF if x >= W-2 else GRASS_A)
-    back[38][0]   = CLIFF_L
-    back[38][W-1] = CLIFF
-    back[38][W-2] = CLIFF
-
-    # Left border cols 0-1 (cliff except at path y=18-21)
-    PATH_Y1, PATH_Y2 = 18, 22   # path rows (inclusive range)
+    # Cliff side walls (left x=0-2, right x=57-59), skip path opening
     for y in range(2, 38):
         if PATH_Y1 <= y <= PATH_Y2:
-            back[y][0] = GRASS_A  # open for path
-            back[y][1] = GRASS
+            # Path opening — keep grass (default)
+            pass
         else:
-            back[y][0] = CLIFF_NW
-            back[y][1] = CLIFF
+            set_tile(back, 0, y, DARK)
+            set_tile(back, 1, y, CLIFF)
+            set_tile(back, 2, y, CLIFF_L)
+            set_tile(back, 3, y, GRASS_A)
+            set_tile(back, W-1, y, DARK)
+            set_tile(back, W-2, y, CLIFF)
+            set_tile(back, W-3, y, CLIFF_L)
+            set_tile(back, W-4, y, GRASS_A)
 
-    # Right border cols 58-59 (cliff except at path y=18-21)
-    for y in range(2, 38):
-        if PATH_Y1 <= y <= PATH_Y2:
-            back[y][W-1] = GRASS_A
-            back[y][W-2] = GRASS
-        else:
-            back[y][W-1] = CLIFF
-            back[y][W-2] = CLIFF_NW
+    # Cliff inner transition row (y=2, y=37)
+    for x in range(4, W-4):
+        set_tile(back, x, 2, GRASS_A)
+        set_tile(back, x, 37, GRASS_A)
 
-    # Add corner fills
-    for y in range(2, 38):
-        if not (PATH_Y1 <= y <= PATH_Y2):
-            back[y][2] = GRASS_A   # inner transition from cliff
+    # Shadow grass band just inside cliff (y=3, y=36)
+    for x in range(4, W-4):
+        set_tile(back, x, 3, G_SHADE)
+        set_tile(back, x, 36, G_SHADE)
 
-    # Main E-W path (y=18-21): slightly different grass to hint at path
+    # Scatter dark grass patches in interior for variety
+    for y in range(4, 36):
+        for x in range(4, W-4):
+            r = random.random()
+            if r < 0.06:
+                back[y][x] = GRASS_S
+            elif r < 0.10:
+                back[y][x] = G_DARK
+
+    # E-W main path (y=PATH_Y1 to PATH_Y2, full width except cliff walls)
+    # y=17: road north edge
+    set_row(back, PATH_Y1, ROAD_N, 0, W)
+    # y=18-20: main road
+    for y in range(PATH_Y1+1, PATH_Y2):
+        set_row(back, y, ROAD, 0, W)
+    # y=22: road south edge
+    set_row(back, PATH_Y2, ROAD_S, 0, W)
+    # Re-apply cliff walls on path rows (left x=0-1 and right x=58-59 are clear)
     for y in range(PATH_Y1, PATH_Y2+1):
-        for x in range(2, W-2):
-            back[y][x] = GRASS_S  # use spawnable grass for path area
+        set_tile(back, 0, y, GRASS)     # left path opening
+        set_tile(back, 1, y, GRASS_A)
+        set_tile(back, W-1, y, GRASS)   # right path opening
+        set_tile(back, W-2, y, GRASS_A)
 
-    # Portal areas — 3x3 dirt patches at each slot entrance
-    SLOT_POS = [
-        (8, 8), (20, 8), (32, 8), (44, 8),   # slots 1-4
-        (8, 28), (20, 28), (32, 28), (44, 28) # slots 5-8
-    ]
-    for (px, py) in SLOT_POS:
-        # 3x3 dirt patch centered on portal tile
+    # Vertical connector paths (single road tile wide) from portals to E-W path
+    for px, py in SLOT_POS[:4]:   # upper portals: connect DOWN to path north edge
+        for cy in range(py+2, PATH_Y1):
+            set_tile(back, px, cy, ROAD)
+    for px, py in SLOT_POS[4:]:   # lower portals: connect UP to path south edge
+        for cy in range(PATH_Y2+1, py-1):
+            set_tile(back, px, cy, ROAD)
+
+    # Portal patches — 3×3 GRASS_C centred on warp tile
+    for px, py in SLOT_POS:
         for dy in range(-1, 2):
             for dx in range(-1, 2):
                 nx, ny = px+dx, py+dy
-                if 2 <= nx < W-2 and 2 <= ny < H-2:
-                    back[ny][nx] = GRASS_C  # distinct tile for portal entry
+                if 3 < nx < W-4 and 3 < ny < H-4:
+                    back[ny][nx] = GRASS_C
 
-    # Paths leading from main E-W path to portals (vertical connectors)
-    for (px, py) in SLOT_POS[:4]:  # upper portals connect down to path
-        for y in range(py+2, PATH_Y1):
-            if 2 <= px < W-2:
-                back[y][px] = GRASS_C
-    for (px, py) in SLOT_POS[4:]:  # lower portals connect up to path
-        for y in range(PATH_Y2+1, py-1):
-            if 2 <= px < W-2:
-                back[y][px] = GRASS_C
-
-    # --- BUILDINGS layer (mostly empty, portal markers in Front instead) ---
+    # ── BUILDINGS layer ─────────────────────────────────────────────────────
     buildings = make_grid(W, H, EMPTY)
 
-    # --- PATHS layer (empty — warps handled via Warp map property) ---
+    # ── PATHS layer (forage spawns; warps are in Warp map property) ─────────
     paths = make_grid(W, H, EMPTY)
+    # Scatter forage spawn tiles (2015=forage marker from Backwoods, firstgid=16: 2016,2017)
+    FORAGE = 2017
+    for y in range(4, 36):
+        for x in range(4, W-4):
+            if back[y][x] == GRASS_S and random.random() < 0.08:
+                paths[y][x] = FORAGE
 
-    # --- FRONT layer (empty) ---
+    # ── FRONT layer — cliff face + trees ────────────────────────────────────
     front = make_grid(W, H, EMPTY)
 
-    # --- AlwaysFront layer (empty) ---
+    # Upper-left cliff face (diagonal, copied from Backwoods rows 0-6)
+    for fy, row in enumerate(CLIFF_FACE_ROWS):
+        for fx, t in enumerate(row):
+            set_tile(front, fx, fy, t)
+
+    # Upper-right cliff face (mirror: just use same cliff face tiles going right-to-left)
+    for fy, row in enumerate(CLIFF_FACE_ROWS):
+        for fi, t in enumerate(row):
+            set_tile(front, W-1-fi, fy, t)
+
+    # Lower-left and lower-right cliff face (flipped vertically)
+    for fy, row in enumerate(CLIFF_FACE_ROWS):
+        for fx, t in enumerate(row):
+            set_tile(front, fx, H-1-fy, t)
+            set_tile(front, W-1-fx, H-1-fy, t)
+
+    # Tree positions (x,y = top-left of 3×4 tree).
+    # Safe zone exclusions: portals ±4 tiles, path y=15-24, cliff walls x<5 or x>54
+    TREES = [
+        # Upper half
+        (5,  3), (14, 3), (25, 3), (37, 3), (50, 3),
+        (5,  7), (26, 6), (37, 5), (50, 7),
+        (5, 12), (13,12), (27,13), (50,12),
+        # Lower half
+        (5, 23), (25,24), (37,23), (50,24),
+        (5, 29), (15,29), (27,29), (50,29),
+        (5, 33), (25,33), (37,34), (50,33),
+    ]
+    for tx, ty in TREES:
+        # Skip if overlaps with path rows or portal exclusion zones
+        if PATH_Y1-3 <= ty+3 and ty <= PATH_Y2+3:
+            continue  # tree touches path band
+        overlap = False
+        for px, py in SLOT_POS:
+            if abs(tx+1 - px) < 4 and abs(ty+1 - py) < 5:
+                overlap = True; break
+        if overlap:
+            continue
+        place_tree(front, tx, ty)
+
+    # ── AlwaysFront layer (empty — no overhanging canopy needed) ────────────
     alwaysfront = make_grid(W, H, EMPTY)
 
     # --- Warp property string ---
