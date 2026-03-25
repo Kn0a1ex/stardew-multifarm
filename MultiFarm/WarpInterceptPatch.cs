@@ -20,15 +20,14 @@ namespace MultiFarm
     {
         static IEnumerable<MethodBase> TargetMethods()
         {
-            // Patch every static warpFarmer overload whose first parameter is a string
-            // locationName.  This covers both the 4-arg and 5-arg (+ bool isStructure)
-            // variants that exist across SDV 1.5/1.6.
+            // Only patch overloads that have a "facingDirectionAfterWarp" parameter.
+            // The (string, int, int, bool flip) overload does not have this parameter
+            // and would cause a Harmony injection error if included.
             return typeof(Game1)
                 .GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
                 .Where(m =>
                     m.Name == "warpFarmer" &&
-                    m.GetParameters().Length >= 4 &&
-                    m.GetParameters()[0].ParameterType == typeof(string));
+                    m.GetParameters().Any(p => p.Name == "facingDirectionAfterWarp"));
         }
 
         [HarmonyPrefix]
