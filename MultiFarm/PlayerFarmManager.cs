@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewValley;
+using StardewValley.Buildings;
 using StardewValley.Locations;
 using System;
 using System.Collections.Generic;
@@ -449,9 +450,9 @@ namespace MultiFarm
 
             EnsurePlayerFarmsExist();
 
-            // Point the farmer's home to their MultiFarm farmhouse so pass-out warps correctly.
+            // Move the farmhand's cabin onto their MultiFarm farm so they spawn there, not on the host's farm.
             if (openSlot > 1)
-                farmer.homeLocation.Value = FarmHouseName(openSlot);
+                RelocateCabin(farmer, openSlot);
 
             SaveAssignments();
 
@@ -464,6 +465,115 @@ namespace MultiFarm
             Game1.chatBox?.addMessage(
                 $"MultiFarm: Welcome to your farm, {farmer.Name}! Head to the Farm Hub to explore.",
                 Color.Green);
+        }
+
+        // ── Cabin relocation ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// Move every assigned farmhand's cabin from the main farm to their MultiFarm plot.
+        /// Safe to call repeatedly — skips cabins already on the correct farm.
+        /// Also buries any unassigned cabins so the main farm stays clean.
+        /// </summary>
+        public void RelocateCabins()
+        {
+            if (!Context.IsMainPlayer) return;
+            foreach (var (slot, playerName) in GetAssignments())
+            {
+                if (slot <= 1) continue;
+                var farmer = Game1.getAllFarmers().FirstOrDefault(f => f.Name == playerName);
+                if (farmer != null)
+                    RelocateCabin(farmer, slot);
+                else if (_assignmentIds.TryGetValue(slot, out long id))
+                    RelocateCabin(id, slot);   // offline farmhand — match by owner ID
+            }
+        }
+
+        /// <summary>Relocate a cabin for an online farmhand.</summary>
+        public void RelocateCabin(Farmer farmer, int slot)
+            => RelocateCabin(farmer.UniqueMultiplayerID, slot);
+
+        /// <summary>Relocate a cabin by owner ID (works for offline farmhands too).</summary>
+        private void RelocateCabin(long farmerId, int slot)
+        {
+            if (slot <= 1 || !Context.IsMainPlayer) return;
+
+            var mainFarm   = Game1.getFarm();
+            var targetFarm = Game1.getLocationFromName(FarmName(slot)) as Farm;
+            if (mainFarm is null || targetFarm is null) return;
+
+            // Find the cabin on the main farm whose owner matches this farmhand.
+            Building? cabin = null;
+            foreach (var b in mainFarm.buildings)
+            {
+                if (!b.isCabin) continue;
+                if (b.GetIndoors() is Cabin c &&
+                    c.owner?.UniqueMultiplayerID == farmerId)
+                {
+                    cabin = b;
+                    break;
+                }
+            }
+
+            // Fallback: any unowned cabin (first-join before SDV has assigned ownership).
+            if (cabin is null)
+            {
+                foreach (var b in mainFarm.buildings)
+                {
+                    if (b.isCabin && b.GetIndoors() is Cabin c && !c.HasOwner)
+                    {
+                        cabin = b;
+                        break;
+                    }
+                }
+            }
+
+            if (cabin is null)
+            {
+                _monitor.Log($"RelocateCabin slot={slot}: no cabin on main farm.", LogLevel.Warn);
+                return;
+            }
+
+            // Already on the correct farm — just fix the exit warp.
+            if (cabin.parentLocationName.Value == FarmName(slot))
+            {
+                FixCabinExitWarp(cabin, slot);
+                return;
+            }
+
+            var d = GetTypeDataForSlot(slot);
+
+            // Place so the cabin door lands at (d.houseX, d.houseY).
+            // Building origin is top-left; door is at (tileX + tilesWide/2, tileY + tilesHigh).
+            cabin.tileX.Value = Math.Max(0, d.houseX - cabin.tilesWide.Value / 2);
+            cabin.tileY.Value = Math.Max(0, d.houseY - cabin.tilesHigh.Value);
+            cabin.parentLocationName.Value = FarmName(slot);
+
+            mainFarm.buildings.Remove(cabin);
+            targetFarm.buildings.Add(cabin);
+
+            FixCabinExitWarp(cabin, slot);
+
+            // homeLocation already points to the cabin interior name — keep it.
+            _monitor.Log(
+                $"RelocateCabin: moved cabin to {FarmName(slot)} at " +
+                $"({cabin.tileX.Value},{cabin.tileY.Value}) for slot {slot}.",
+                LogLevel.Info);
+        }
+
+        private void FixCabinExitWarp(Building cabin, int slot)
+        {
+            var d        = GetTypeDataForSlot(slot);
+            var interior = cabin.GetIndoors();
+            if (interior is null) return;
+            foreach (var warp in interior.warps)
+            {
+                if (warp.TargetName == "Farm" || warp.TargetName == string.Empty)
+                {
+                    warp.TargetName = FarmName(slot);
+                    warp.TargetX    = d.houseX;
+                    warp.TargetY    = d.houseY + 1;
+                }
+            }
         }
 
         private void RegisterFarmLocation(int slot)

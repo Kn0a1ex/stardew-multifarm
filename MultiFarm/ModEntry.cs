@@ -146,7 +146,8 @@ namespace MultiFarm
                 FarmManager.AssignFarm(Game1.player.Name, 1, (int)Game1.whichFarm,
                     Game1.player.farmName?.Value ?? "");
                 Game1.player.team.useSeparateWallets.Value = true;
-                BuryCabins();
+                FarmManager.RelocateCabins();   // move assigned farmhand cabins to their farms first
+                BuryCabins();                   // bury any remaining unassigned cabins
             }
 
             FarmManager.EnsurePlayerFarmsExist();
@@ -161,6 +162,8 @@ namespace MultiFarm
             // Re-register defensively — map reloads can reset locations.
             HubManager.RegisterLocations();
             FarmManager.EnsurePlayerFarmsExist();
+
+            FarmManager.RelocateCabins();   // ensure farmhand cabins are on the correct farms after map reload
 
             // Redirect married NPC home locations to the spouse's private farmhouse.
             // The schedule-string side is handled by NpcSchedulePatch (Harmony prefix).
