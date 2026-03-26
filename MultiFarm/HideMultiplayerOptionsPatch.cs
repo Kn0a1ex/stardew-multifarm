@@ -54,13 +54,13 @@ namespace MultiFarm
                 }
             }
 
-            // Move the wrench / advanced-options button off-screen.
-            if (__instance.advancedOptionsButton is not null)
-                __instance.advancedOptionsButton.bounds = new Rectangle(-9999, -9999, 0, 0);
+            // Leave advancedOptionsButton (wrench) visible — it opens AdvancedGameOptions,
+            // a separate submenu that contains Difficulty and Wallets. We only want to
+            // remove Starting Cabins and Cabin Layout, not those settings.
 
             _monitor?.Log(
                 $"HideMultiplayerOptionsPatch: removed {removedLeft} left, {removedRight} right Cabins buttons; " +
-                $"{layoutCount} layout buttons; {removedLabels} sidebar labels; wrench hidden.",
+                $"{layoutCount} layout buttons; {removedLabels} cabin labels.",
                 LogLevel.Debug);
         }
     }
