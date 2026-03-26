@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
+using StardewValley.Menus;
 using System;
 
 namespace MultiFarm
@@ -41,6 +42,7 @@ namespace MultiFarm
 
             helper.Events.Content.AssetRequested        += OnAssetRequested;
             helper.Events.GameLoop.GameLaunched         += OnGameLaunched;
+            helper.Events.GameLoop.SaveCreated          += OnSaveCreated;
             helper.Events.GameLoop.SaveLoaded           += OnSaveLoaded;
             helper.Events.GameLoop.DayStarted           += OnDayStarted;
             helper.Events.GameLoop.Saving               += OnSaving;
@@ -180,6 +182,14 @@ namespace MultiFarm
             }
         }
 
+        private void OnSaveCreated(object? sender, SaveCreatedEventArgs e)
+        {
+            // Force zero cabins regardless of what the character-creation UI showed.
+            // MultiFarm manages player slots itself — SDV cabin logic is not needed.
+            Game1.startingCabins = 0;
+            Monitor.Log("SaveCreated: forced startingCabins = 0.", LogLevel.Debug);
+        }
+
         private void OnSaving(object? sender, SavingEventArgs e)
         {
             FarmManager.SaveAssignments();
@@ -300,8 +310,15 @@ namespace MultiFarm
 
         private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
         {
-            if (!Context.IsWorldReady) return;
             if (e.NewMenu is null) return;
+
+            // Hide the advanced-options (wrench) button on the character-creation screen.
+            // That section only contains Starting Cabins / Cabin Layout, which MultiFarm
+            // manages itself — showing it would confuse players and allow misconfiguration.
+            if (e.NewMenu.GetType().Name.Contains("CharacterCustomization"))
+                HideCabinOptions(e.NewMenu);
+
+            if (!Context.IsWorldReady) return;
 
             // Redirect the carpenter / building-placement menu to use the player's own farm.
             // This prevents players from accidentally (or intentionally) placing buildings
@@ -339,6 +356,65 @@ namespace MultiFarm
                 "Could not find carpenter menu farm field — building restriction not applied. " +
                 "Check the field name for your SDV version.",
                 LogLevel.Warn);
+        }
+
+        private void HideCabinOptions(IClickableMenu menu)
+        {
+            // Collapse the advanced-options panel if it is currently open.
+            string[] boolFields = { "showingAdvancedOptions", "_showAdvanced", "advancedOptionsOpen" };
+            foreach (var boolField in boolFields)
+            {
+                try
+                {
+                    var field = Helper.Reflection.GetField<bool>(menu, boolField, required: false);
+                    if (field is not null)
+                    {
+                        field.SetValue(false);
+                        Monitor.Log($"HideCabinOptions: closed panel via '{boolField}'.", LogLevel.Debug);
+                        break;
+                    }
+                }
+                catch { /* try next */ }
+            }
+
+            // Move the wrench / advanced-options button off-screen so it cannot be clicked.
+            string[] buttonFields =
+            {
+                "advancedOptionsButton", "advancedButton", "wrenchButton",
+                "coopHelpButton", "advancedCCButton",
+            };
+            foreach (var buttonField in buttonFields)
+            {
+                try
+                {
+                    var field = Helper.Reflection.GetField<StardewValley.Menus.ClickableTextureComponent>(
+                        menu, buttonField, required: false);
+                    if (field is not null)
+                    {
+                        var btn = field.GetValue();
+                        if (btn is not null)
+                        {
+                            btn.bounds = new Rectangle(-9999, -9999, 0, 0);
+                            Monitor.Log($"HideCabinOptions: hid button '{buttonField}'.", LogLevel.Debug);
+                        }
+                    }
+                }
+                catch { /* try next */ }
+            }
+
+            // Also scan allClickableComponents for anything named "advanced" or "wrench".
+            if (menu.allClickableComponents is not null)
+            {
+                foreach (var comp in menu.allClickableComponents)
+                {
+                    string n = comp.name?.ToLowerInvariant() ?? "";
+                    if (n.Contains("advanced") || n.Contains("wrench") || n.Contains("cabin"))
+                    {
+                        comp.bounds = new Rectangle(-9999, -9999, 0, 0);
+                        Monitor.Log($"HideCabinOptions: hid component '{comp.name}'.", LogLevel.Debug);
+                    }
+                }
+            }
         }
     }
 }
