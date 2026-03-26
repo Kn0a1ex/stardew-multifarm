@@ -25,8 +25,10 @@ namespace MultiFarm
             if (__instance.source != CharacterCustomization.Source.HostNewFarm)
                 return;
 
-            // Force cabins to zero — prevents the cabin-count label from showing a number.
-            Game1.startingCabins = 0;
+            // Force cabins to max so all farmhand slots are joinable.
+            // The engine requires one cabin per farmhand; MultiFarm hides the UI
+            // but still needs cabins present for the multiplayer connection mechanism.
+            Game1.startingCabins = Game1.CurrentPlayerLimit - 1;
 
             // Remove Starting Cabins arrow buttons.
             int removedLeft  = __instance.leftSelectionButtons .RemoveAll(b => b.name == "Cabins");
