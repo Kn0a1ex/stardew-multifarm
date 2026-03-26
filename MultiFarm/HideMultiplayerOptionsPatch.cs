@@ -40,12 +40,19 @@ namespace MultiFarm
             int layoutCount = __instance.cabinLayoutButtons.Count;
             __instance.cabinLayoutButtons.Clear();
 
-            // Remove cabin labels from the public labels list.
-            // The two cabin labels contain localised strings we can't match by key,
-            // but they sit at negative X (left panel) and are not present for non-host sources.
-            // Safer: remove any label whose bounds place it in the left sidebar (x < 0 or x < xPos).
-            int removedLabels = __instance.labels.RemoveAll(
-                l => l.bounds.X < __instance.xPositionOnScreen);
+            // Move the two private cabin labels off-screen via reflection.
+            // (Removing all left-sidebar labels would also take out Difficulty/Wallets.)
+            int removedLabels = 0;
+            foreach (string fieldName in new[] { "startingCabinsLabel", "cabinLayoutLabel" })
+            {
+                var field = typeof(CharacterCustomization)
+                    .GetField(fieldName, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (field?.GetValue(__instance) is ClickableComponent label)
+                {
+                    label.bounds = new Rectangle(-9999, -9999, 0, 0);
+                    removedLabels++;
+                }
+            }
 
             // Move the wrench / advanced-options button off-screen.
             if (__instance.advancedOptionsButton is not null)
