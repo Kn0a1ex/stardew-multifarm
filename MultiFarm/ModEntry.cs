@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
+using StardewValley.Buildings;
 using System;
 
 namespace MultiFarm
@@ -22,6 +23,9 @@ namespace MultiFarm
 
         /// <summary>Host → all clients: current assignment table.</summary>
         public const string MsgSyncAssignments = "MultiFarm.SyncAssignments";
+
+        /// <summary>Host → client: all farm slots are taken.</summary>
+        public const string MsgSlotFull = "MultiFarm.SlotFull";
 
         // ── Properties ───────────────────────────────────────────────────────
         internal static ModEntry Instance { get; private set; } = null!;
@@ -141,6 +145,8 @@ namespace MultiFarm
                 Monitor.Log($"Host farm type: Game1.whichFarm = {(int)Game1.whichFarm}", LogLevel.Info);
                 FarmManager.AssignFarm(Game1.player.Name, 1, (int)Game1.whichFarm,
                     Game1.player.farmName?.Value ?? "");
+                Game1.player.team.useSeparateWallets.Value = true;
+                BuryCabins();
             }
 
             FarmManager.EnsurePlayerFarmsExist();
@@ -184,10 +190,8 @@ namespace MultiFarm
 
         private void OnSaveCreated(object? sender, SaveCreatedEventArgs e)
         {
-            // Force zero cabins regardless of what the character-creation UI showed.
-            // MultiFarm manages player slots itself — SDV cabin logic is not needed.
-            Game1.startingCabins = 0;
-            Monitor.Log("SaveCreated: forced startingCabins = 0.", LogLevel.Debug);
+            Game1.player.team.useSeparateWallets.Value = true;
+            BuryCabins();
         }
 
         private void OnSaving(object? sender, SavingEventArgs e)
@@ -263,6 +267,11 @@ namespace MultiFarm
                     var sync = e.ReadAs<PlayerFarmManager.SyncPayload>();
                     FarmManager.OnSyncAssignments(sync);
                     break;
+
+                case MsgSlotFull:
+                    var msg = e.ReadAs<string>();
+                    Game1.chatBox?.addMessage(msg, Color.Red);
+                    break;
             }
         }
 
@@ -306,6 +315,25 @@ namespace MultiFarm
         private void CmdSelectFarm(string cmd, string[] args)
         {
             FarmManager.ShowFarmSelectionMenu(Game1.player);
+        }
+
+        private void BuryCabins()
+        {
+            if (!Context.IsMainPlayer) return;
+            var farm = Game1.getFarm();
+            if (farm is null) return;
+            int count = 0;
+            foreach (var building in farm.buildings)
+            {
+                if (building.buildingType.Value == "Cabin")
+                {
+                    building.tileX.Value = -1000;
+                    building.tileY.Value = -1000;
+                    count++;
+                }
+            }
+            if (count > 0)
+                Monitor.Log($"BuryCabins: moved {count} cabin(s) off-map.", LogLevel.Debug);
         }
 
         private void OnMenuChanged(object? sender, MenuChangedEventArgs e)

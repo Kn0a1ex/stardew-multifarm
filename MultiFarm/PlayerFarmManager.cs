@@ -423,6 +423,15 @@ namespace MultiFarm
                 Game1.chatBox?.addMessage(
                     $"MultiFarm: All {ModEntry.Instance.Config.MaxPlayers} farm slots are taken.",
                     Color.Red);
+                if (farmer.UniqueMultiplayerID != Game1.player.UniqueMultiplayerID)
+                {
+                    _helper.Multiplayer.SendMessage(
+                        message: $"MultiFarm: All farm slots are taken. Please ask the host to make room.",
+                        messageType: ModEntry.MsgSlotFull,
+                        modIDs: new[] { _helper.ModRegistry.ModID },
+                        playerIDs: new[] { farmer.UniqueMultiplayerID }
+                    );
+                }
                 return;
             }
 
@@ -439,6 +448,11 @@ namespace MultiFarm
             }
 
             EnsurePlayerFarmsExist();
+
+            // Point the farmer's home to their MultiFarm farmhouse so pass-out warps correctly.
+            if (openSlot > 1)
+                farmer.homeLocation.Value = FarmHouseName(openSlot);
+
             SaveAssignments();
 
             _monitor.Log($"Assigned {farmer.Name} to slot {openSlot} (type {farmType}).", LogLevel.Info);
@@ -535,8 +549,8 @@ namespace MultiFarm
                 string mapPath = _helper.ModContent
                     .GetInternalAssetName("assets/maps/PlayerFarmHouse.tmx").Name;
 
-                // DecoratableLocation enables wallpaper, flooring, and furniture placement
-                var houseLoc = new DecoratableLocation(mapPath, FarmHouseName(slot));
+                // FarmHouse enables pass-out warps, spouse logic, and full farmhouse behaviour
+                var houseLoc = new FarmHouse(mapPath, FarmHouseName(slot));
                 Game1.locations.Add(houseLoc);
 
                 var typeData = GetTypeDataForSlot(slot);
