@@ -3,17 +3,16 @@ using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Menus;
-using System.Linq;
-using System.Reflection;
 
 namespace MultiFarm
 {
     /// <summary>
-    /// Strips cabin-related controls from the character-creation screen.
-    /// MultiFarm manages all player slots itself; the vanilla Starting Cabins /
-    /// Cabin Layout options are irrelevant and would confuse players.
+    /// Strips Starting Cabins and Cabin Layout controls from the character-creation screen.
+    /// Patches ResetComponents (private) so the removal survives every rebuild of the UI,
+    /// including the rebuild that happens when returning from AdvancedGameOptions.
+    /// Difficulty and Wallets (also in ResetComponents for HostNewFarm) are left intact.
     /// </summary>
-    [HarmonyPatch(typeof(CharacterCustomization))]
+    [HarmonyPatch(typeof(CharacterCustomization), "ResetComponents")]
     internal static class HideMultiplayerOptionsPatch
     {
         private static IMonitor? _monitor;
@@ -21,27 +20,24 @@ namespace MultiFarm
         public static void Initialize(IMonitor monitor) => _monitor = monitor;
 
         [HarmonyPostfix]
-        [HarmonyPatch(MethodType.Constructor, new[] { typeof(CharacterCustomization.Source), typeof(bool) })]
-        private static void Constructor_Postfix(CharacterCustomization __instance)
+        private static void ResetComponents_Postfix(CharacterCustomization __instance)
         {
-            // Only apply at new-game / host-new-farm creation.
-            if (__instance.source != CharacterCustomization.Source.NewGame &&
-                __instance.source != CharacterCustomization.Source.HostNewFarm)
+            if (__instance.source != CharacterCustomization.Source.HostNewFarm)
                 return;
 
-            // Force cabins to zero regardless of source default.
+            // Force cabins to zero — prevents the cabin-count label from showing a number.
             Game1.startingCabins = 0;
 
-            // Remove "Cabins" arrow buttons from the selection lists (public fields).
+            // Remove Starting Cabins arrow buttons.
             int removedLeft  = __instance.leftSelectionButtons .RemoveAll(b => b.name == "Cabins");
             int removedRight = __instance.rightSelectionButtons.RemoveAll(b => b.name == "Cabins");
 
-            // Clear cabin-layout close/separate buttons (public field).
+            // Remove Cabin Layout (Close/Separate) buttons.
             int layoutCount = __instance.cabinLayoutButtons.Count;
             __instance.cabinLayoutButtons.Clear();
 
-            // Move the two private cabin labels off-screen via reflection.
-            // (Removing all left-sidebar labels would also take out Difficulty/Wallets.)
+            // Move the two cabin labels off-screen via reflection.
+            // (Bulk-removing labels by X position also removes Difficulty/Wallets labels.)
             int removedLabels = 0;
             foreach (string fieldName in new[] { "startingCabinsLabel", "cabinLayoutLabel" })
             {
@@ -55,12 +51,11 @@ namespace MultiFarm
             }
 
             // Leave advancedOptionsButton (wrench) visible — it opens AdvancedGameOptions,
-            // a separate submenu that contains Difficulty and Wallets. We only want to
-            // remove Starting Cabins and Cabin Layout, not those settings.
+            // which contains Difficulty and Wallets. Those settings should remain accessible.
 
             _monitor?.Log(
-                $"HideMultiplayerOptionsPatch: removed {removedLeft} left, {removedRight} right Cabins buttons; " +
-                $"{layoutCount} layout buttons; {removedLabels} cabin labels.",
+                $"HideMultiplayerOptionsPatch: removed {removedLeft}L/{removedRight}R Cabins buttons, " +
+                $"{layoutCount} layout buttons, {removedLabels} cabin labels.",
                 LogLevel.Debug);
         }
     }
