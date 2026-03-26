@@ -368,7 +368,7 @@ namespace MultiFarm
             if (fromHub == FarmHubManager.HubNameBackwoods)
                 return (d.spawnX, 5, 2);                  // face down — entered from north
             if (fromHub == FarmHubManager.HubNameForest)
-                return (d.southX + 2, d.mapH - 2, 0);     // face up   — 2 tiles from south edge, on the forest path
+                return (d.southX + 1, d.mapH - 2, 0);     // face up   — 2 tiles from south edge, on the forest path
             // Farm Hub: arrive near east edge where the BusStop path connects
             return (d.mapW - 2, 17, 3);                   // face left — entered from east
         }
