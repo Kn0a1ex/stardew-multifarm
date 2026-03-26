@@ -36,19 +36,23 @@ namespace MultiFarm
         private const string AssignmentsFile = "data/assignments.json";
 
         // ── Farm type data ───────────────────────────────────────────────────
-        // (tmx, caveX, caveY, houseX, houseY, spawnX, spawnY, mapH, southX, mapW)
+        // (tmx, caveX, caveY, houseX, houseY, spawnX, spawnY, mapH, southX, mapW, eastPathY)
+        // eastPathY: the Y tile of the east-edge exit path (used for Farm Hub arrival).
+        // Vanilla SDV 1.6 farm type IDs: 0-5 = classic types, 6 = Beach, 7 = Meadowlands.
         private static readonly Dictionary<int, (string tmx, int caveX, int caveY,
                                                   int houseX, int houseY,
                                                   int spawnX, int spawnY,
-                                                  int mapH, int southX, int mapW)> FarmTypeData = new()
+                                                  int mapH, int southX, int mapW,
+                                                  int eastPathY)> FarmTypeData = new()
         {
-            { 0, ("PlayerFarm_0.tmx", 34,  5, 64, 14, 40, 5, 65, 40,  80) },
-            { 1, ("PlayerFarm_1.tmx", 34,  5, 64, 14, 40, 5, 65, 40,  80) },
-            { 2, ("PlayerFarm_2.tmx", 34,  5, 64, 14, 40, 5, 65, 40,  80) },
-            { 3, ("PlayerFarm_3.tmx", 34,  5, 64, 14, 40, 5, 65, 40,  80) },
-            { 4, ("PlayerFarm_4.tmx", 34,  5, 64, 14, 40, 5, 65, 40,  80) },
-            { 5, ("PlayerFarm_5.tmx", 30, 35, 64, 14, 40, 5, 80, 40,  80) },
-            { 6, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 50, 5, 75, 52, 100) },
+            { 0, ("PlayerFarm_0.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17) },
+            { 1, ("PlayerFarm_1.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17) },
+            { 2, ("PlayerFarm_2.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17) },
+            { 3, ("PlayerFarm_3.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17) },
+            { 4, ("PlayerFarm_4.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17) },
+            { 5, ("PlayerFarm_5.tmx", 30, 35, 64, 14, 40, 5,  80, 40,  80, 17) },
+            { 6, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 40, 1, 104, 81,  80, 17) },  // Beach
+            { 7, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 63, 1,  75, 51, 100, 22) },  // Meadowlands
         };
 
         private readonly IModHelper _helper;
@@ -347,11 +351,13 @@ namespace MultiFarm
         // ── Private helpers ───────────────────────────────────────────────────
 
         private static (string tmx, int caveX, int caveY, int houseX, int houseY,
-                         int spawnX, int spawnY, int mapH, int southX, int mapW) GetTypeData(int farmType)
+                         int spawnX, int spawnY, int mapH, int southX, int mapW,
+                         int eastPathY) GetTypeData(int farmType)
             => FarmTypeData.TryGetValue(farmType, out var d) ? d : FarmTypeData[0];
 
         internal (string tmx, int caveX, int caveY, int houseX, int houseY,
-                  int spawnX, int spawnY, int mapH, int southX, int mapW) GetTypeDataForSlot(int slot)
+                  int spawnX, int spawnY, int mapH, int southX, int mapW,
+                  int eastPathY) GetTypeDataForSlot(int slot)
         {
             long id = _assignmentIds.TryGetValue(slot, out long eid) ? eid : 0;
             int farmType = (id != 0 && _farmTypes.TryGetValue(id, out int t)) ? t : 0;
@@ -366,11 +372,11 @@ namespace MultiFarm
         {
             var d = GetTypeDataForSlot(slot);
             if (fromHub == FarmHubManager.HubNameBackwoods)
-                return (d.spawnX, 5, 2);                  // face down — entered from north
+                return (d.spawnX, d.spawnY, 2);            // face down — entered from north
             if (fromHub == FarmHubManager.HubNameForest)
                 return (d.southX + 1, d.mapH - 2, 0);     // face up   — 2 tiles from south edge, on the forest path
             // Farm Hub: arrive near east edge where the BusStop path connects
-            return (d.mapW - 2, 17, 3);                   // face left — entered from east
+            return (d.mapW - 2, d.eastPathY, 3);           // face left — entered from east
         }
 
         private SyncPayload BuildSyncPayload() => new()

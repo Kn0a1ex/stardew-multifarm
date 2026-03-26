@@ -132,10 +132,14 @@ namespace MultiFarm
             HubManager.RegisterLocations();
             FarmManager.LoadAssignments();
 
-            // Auto-assign host to slot 1 (vanilla Farm) if not yet assigned.
-            // Pass their existing farmName so the hub label reflects the vanilla-set name.
-            if (Context.IsMainPlayer && FarmManager.GetSlotForPlayer(Game1.player.Name) == 0)
-                FarmManager.AssignFarm(Game1.player.Name, 1, 0, Game1.player.farmName?.Value ?? "");
+            // Always re-assign host to slot 1 on load so the correct farm type is stored.
+            // Game1.whichFarm is only available after save load, not at mod entry.
+            if (Context.IsMainPlayer)
+            {
+                Monitor.Log($"Host farm type: Game1.whichFarm = {(int)Game1.whichFarm}", LogLevel.Info);
+                FarmManager.AssignFarm(Game1.player.Name, 1, (int)Game1.whichFarm,
+                    Game1.player.farmName?.Value ?? "");
+            }
 
             FarmManager.EnsurePlayerFarmsExist();
 
