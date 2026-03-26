@@ -36,23 +36,24 @@ namespace MultiFarm
         private const string AssignmentsFile = "data/assignments.json";
 
         // ── Farm type data ───────────────────────────────────────────────────
-        // (tmx, caveX, caveY, houseX, houseY, spawnX, spawnY, mapH, southX, mapW, eastPathY)
-        // eastPathY: the Y tile of the east-edge exit path (used for Farm Hub arrival).
+        // (tmx, caveX, caveY, houseX, houseY, spawnX, spawnY, mapH, southX, mapW, eastPathY, forestFacing)
+        // eastPathY:    Y tile of the east-edge exit path (Farm Hub arrival).
+        // forestFacing: facing direction on arrival from Forest Hub (0=up for most farms, 3=left for Meadowlands).
         // Vanilla SDV 1.6 farm type IDs: 0-5 = classic types, 6 = Beach, 7 = Meadowlands.
         private static readonly Dictionary<int, (string tmx, int caveX, int caveY,
                                                   int houseX, int houseY,
                                                   int spawnX, int spawnY,
                                                   int mapH, int southX, int mapW,
-                                                  int eastPathY)> FarmTypeData = new()
+                                                  int eastPathY, int forestFacing)> FarmTypeData = new()
         {
-            { 0, ("PlayerFarm_0.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17) },
-            { 1, ("PlayerFarm_1.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17) },
-            { 2, ("PlayerFarm_2.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17) },
-            { 3, ("PlayerFarm_3.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17) },
-            { 4, ("PlayerFarm_4.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17) },
-            { 5, ("PlayerFarm_5.tmx", 30, 35, 64, 14, 40, 5,  80, 40,  80, 17) },
-            { 6, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 40, 1, 104, 81,  80, 17) },  // Beach
-            { 7, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 63, 1,  75, 51, 100, 22) },  // Meadowlands
+            { 0, ("PlayerFarm_0.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17, 0) },
+            { 1, ("PlayerFarm_1.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17, 0) },
+            { 2, ("PlayerFarm_2.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17, 0) },
+            { 3, ("PlayerFarm_3.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17, 0) },
+            { 4, ("PlayerFarm_4.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17, 0) },
+            { 5, ("PlayerFarm_5.tmx", 30, 35, 64, 14, 40, 5,  80, 40,  80, 17, 0) },
+            { 6, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 40, 1, 104, 81,  80, 17, 0) },  // Beach
+            { 7, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 63, 1,  75, 51, 100, 22, 3) },  // Meadowlands
         };
 
         private readonly IModHelper _helper;
@@ -88,6 +89,9 @@ namespace MultiFarm
                 throw new ArgumentOutOfRangeException(nameof(slot));
 
             var farmer = Game1.getAllFarmers().FirstOrDefault(f => f.Name == playerName);
+            // getAllFarmers may not include the local player during OnSaveLoaded; fall back directly.
+            if (farmer is null && playerName == Game1.player?.Name)
+                farmer = Game1.player;
             long id = farmer?.UniqueMultiplayerID ?? 0;
 
             // Remove any previous assignment for this player (by name or ID)
@@ -352,12 +356,12 @@ namespace MultiFarm
 
         private static (string tmx, int caveX, int caveY, int houseX, int houseY,
                          int spawnX, int spawnY, int mapH, int southX, int mapW,
-                         int eastPathY) GetTypeData(int farmType)
+                         int eastPathY, int forestFacing) GetTypeData(int farmType)
             => FarmTypeData.TryGetValue(farmType, out var d) ? d : FarmTypeData[0];
 
         internal (string tmx, int caveX, int caveY, int houseX, int houseY,
                   int spawnX, int spawnY, int mapH, int southX, int mapW,
-                  int eastPathY) GetTypeDataForSlot(int slot)
+                  int eastPathY, int forestFacing) GetTypeDataForSlot(int slot)
         {
             long id = _assignmentIds.TryGetValue(slot, out long eid) ? eid : 0;
             int farmType = (id != 0 && _farmTypes.TryGetValue(id, out int t)) ? t : 0;
@@ -371,12 +375,13 @@ namespace MultiFarm
         public (int x, int y, int facing) GetHubArrivalOnFarm(int slot, string fromHub)
         {
             var d = GetTypeDataForSlot(slot);
+            _monitor.Log($"GetHubArrivalOnFarm slot={slot} hub={fromHub} farmType={GetTypeDataForSlot(slot).tmx} spawnX={d.spawnX} spawnY={d.spawnY} southX={d.southX} mapH={d.mapH} mapW={d.mapW} eastPathY={d.eastPathY} forestFacing={d.forestFacing}", LogLevel.Debug);
             if (fromHub == FarmHubManager.HubNameBackwoods)
-                return (d.spawnX, d.spawnY, 2);            // face down — entered from north
+                return (d.spawnX, d.spawnY, 2);                          // face down — entered from north
             if (fromHub == FarmHubManager.HubNameForest)
-                return (d.southX + 1, d.mapH - 2, 0);     // face up   — 2 tiles from south edge, on the forest path
+                return (d.southX + 1, d.mapH - 2, d.forestFacing);      // face per farm type
             // Farm Hub: arrive near east edge where the BusStop path connects
-            return (d.mapW - 2, d.eastPathY, 3);           // face left — entered from east
+            return (d.mapW - 2, d.eastPathY, 3);                         // face left — entered from east
         }
 
         private SyncPayload BuildSyncPayload() => new()

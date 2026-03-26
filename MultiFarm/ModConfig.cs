@@ -17,7 +17,7 @@ namespace MultiFarm
         ///   0 = Standard, 1 = Riverland, 2 = Forest, 3 = Hill-top,
         ///   4 = Wilderness, 5 = Four Corners, 6 = Meadowlands
         /// </summary>
-        public int[] AllowedFarmTypes { get; set; } = { 0, 1, 2, 3, 4, 5, 6 };
+        public int[] AllowedFarmTypes { get; set; } = { 0, 1, 2, 3, 4, 5, 6, 7 };
 
         /// <summary>
         /// Whether the hub warps replace the default Farm ↔ BusStop transition.
