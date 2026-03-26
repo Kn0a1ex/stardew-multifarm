@@ -63,6 +63,43 @@ namespace MultiFarm
                 tileY                    = FarmHubManager.HubFarmEntryFromBusStop.Y;
                 facingDirectionAfterWarp = 3;
             }
+            // Farm north edge → Backwoods Hub (south wall, player's slot portal)
+            // SDV hard-codes Farm→Backwoods the same way as Farm→BusStop; map edits don't catch it.
+            else if (dest == "Backwoods" && from == "Farm")
+            {
+                var hubLoc = Game1.getLocationFromName(FarmHubManager.HubNameBackwoods);
+                if (hubLoc is not null)
+                {
+                    locationRequest = new LocationRequest(
+                        FarmHubManager.HubNameBackwoods, false, hubLoc);
+                    int slot = ModEntry.Instance.FarmManager
+                                   .GetSlotForPlayer(Game1.player?.UniqueMultiplayerID ?? 0);
+                    var arrival = slot > 0
+                        ? FarmHubManager.GetHubArrivalForSlot(slot, FarmHubManager.HubNameBackwoods)
+                        : FarmHubManager.HubBackwoodsEntryFromFarm;
+                    tileX                    = arrival.X;
+                    tileY                    = arrival.Y;
+                    facingDirectionAfterWarp = 0; // face up — entered hub from south
+                }
+            }
+            // Farm south edge → Forest Hub (north wall, player's slot portal)
+            else if (dest == "Forest" && from == "Farm")
+            {
+                var hubLoc = Game1.getLocationFromName(FarmHubManager.HubNameForest);
+                if (hubLoc is not null)
+                {
+                    locationRequest = new LocationRequest(
+                        FarmHubManager.HubNameForest, false, hubLoc);
+                    int slot = ModEntry.Instance.FarmManager
+                                   .GetSlotForPlayer(Game1.player?.UniqueMultiplayerID ?? 0);
+                    var arrival = slot > 0
+                        ? FarmHubManager.GetHubArrivalForSlot(slot, FarmHubManager.HubNameForest)
+                        : FarmHubManager.HubForestEntryFromFarm;
+                    tileX                    = arrival.X;
+                    tileY                    = arrival.Y;
+                    facingDirectionAfterWarp = 2; // face down — entered hub from north
+                }
+            }
             // Hub portal → player farm: TMX warp uses a placeholder tile (75,15).
             // Correct destination tile here so the player arrives right on the first warp.
             else if (FarmHubManager.IsHubLocation(from) &&
