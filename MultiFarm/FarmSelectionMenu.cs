@@ -41,7 +41,7 @@ namespace MultiFarm
             ("Hill-top",     "Rocky terrain with a quarry for mining.",                 3),
             ("Wilderness",   "Monsters roam at night. For the adventurous.",            4),
             ("Four Corners", "Four distinct sections with varied resources.",            5),
-            ("Beach",        "A farm by the sea. Fish in the ocean from your land.",     6),
+            ("Beach",        "Uses Meadowlands layout (Beach map coming soon).",         6),
             ("Meadowlands",  "Wide open pastures. Perfect for animal farming.",         7),
         };
 
@@ -83,6 +83,12 @@ namespace MultiFarm
             _nameEntryPhase = true;
             _errorMessage   = "";
 
+            // Deselect any prior TextBox before swapping. Setting Selected = true on a
+            // new TextBox subscribes it to Game1.keyboardDispatcher; the old one stays
+            // referenced by the dispatcher until something else deselects it, which can
+            // duplicate keypresses or drop the first input frame.
+            if (_nameBox != null) _nameBox.Selected = false;
+
             int boxX = xPositionOnScreen + width / 2 - 200;
             int boxY = yPositionOnScreen + height / 2 - 10;
 
@@ -122,7 +128,12 @@ namespace MultiFarm
         {
             if (_nameEntryPhase)
             {
-                if (key == Keys.Escape) { _nameEntryPhase = false; _errorMessage = ""; }
+                if (key == Keys.Escape)
+                {
+                    _nameEntryPhase = false;
+                    _errorMessage   = "";
+                    if (_nameBox != null) _nameBox.Selected = false;
+                }
                 if (key == Keys.Enter)  TryConfirmName();
                 // TextBox handles character input internally via Update()
             }

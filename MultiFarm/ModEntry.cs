@@ -6,6 +6,8 @@ using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Buildings;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace MultiFarm
 {
@@ -14,6 +16,11 @@ namespace MultiFarm
     /// </summary>
     public class ModEntry : Mod
     {
+        /// <summary>
+        /// Tracks NPCs we redirected so we can restore their original home on divorce.
+        /// Key = NPC name. Value = (original DefaultMap, original DefaultPosition).
+        /// </summary>
+        private readonly Dictionary<string, (string map, Vector2 pos)> _originalNpcHomes = new();
         // ── Multiplayer message type IDs ──────────────────────────────────────
         /// <summary>Host → client: "you need to pick a farm type".</summary>
         public const string MsgNeedsFarmSelection = "MultiFarm.NeedsFarmSelection";
@@ -48,6 +55,7 @@ namespace MultiFarm
             helper.Events.GameLoop.GameLaunched         += OnGameLaunched;
             helper.Events.GameLoop.SaveCreated          += OnSaveCreated;
             helper.Events.GameLoop.SaveLoaded           += OnSaveLoaded;
+            helper.Events.GameLoop.ReturnedToTitle      += OnReturnedToTitle;
             helper.Events.GameLoop.DayStarted           += OnDayStarted;
             helper.Events.GameLoop.Saving               += OnSaving;
             helper.Events.Player.Warped                 += OnWarped;
@@ -135,6 +143,12 @@ namespace MultiFarm
 
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
+            // Fresh save load — clear any per-session state from a previous save
+            // we may have loaded since SMAPI started (e.g. host returned to title
+            // and joined a different world, or reloaded a different save).
+            FarmManager.ResetSessionTracking();
+            _originalNpcHomes.Clear();
+
             HubManager.RegisterLocations();
             FarmManager.LoadAssignments();
 
@@ -170,6 +184,10 @@ namespace MultiFarm
             // Here we fix DefaultMap/DefaultPosition so the NPC warps to the right
             // location at the end of the night.  Only the host has authority to do this.
             if (!Context.IsMainPlayer) return;
+
+            // Track which NPCs we (re)wrote this pass so we can restore the rest.
+            var touchedThisPass = new HashSet<string>();
+
             foreach (var farmer in Game1.getAllFarmers())
             {
                 if (string.IsNullOrEmpty(farmer.spouse)) continue;
@@ -179,7 +197,22 @@ namespace MultiFarm
                 var npc = Game1.getCharacterFromName(farmer.spouse);
                 if (npc is null) continue;
 
+                // Slot 1 (host) lives in the vanilla FarmHouse — no redirect needed,
+                // and we don't want to snapshot a "fake" original from a previous run.
                 string hubHouse = PlayerFarmManager.FarmHouseName(slot);
+                if (hubHouse == "FarmHouse")
+                {
+                    touchedThisPass.Add(npc.Name);
+                    continue;
+                }
+
+                // Snapshot the original home the first time we touch this NPC so a
+                // later divorce can restore it.
+                if (!_originalNpcHomes.ContainsKey(npc.Name))
+                    _originalNpcHomes[npc.Name] = (npc.DefaultMap, npc.DefaultPosition);
+
+                touchedThisPass.Add(npc.Name);
+
                 if (npc.DefaultMap != hubHouse)
                 {
                     npc.DefaultMap      = hubHouse;
@@ -189,12 +222,40 @@ namespace MultiFarm
                         LogLevel.Debug);
                 }
             }
+
+            // Restore any NPC we previously redirected but who is no longer married
+            // to a MultiFarm player this day (handles divorce / unmarry).
+            var toRestore = _originalNpcHomes.Keys
+                .Where(name => !touchedThisPass.Contains(name))
+                .ToList();
+            foreach (var name in toRestore)
+            {
+                var (origMap, origPos) = _originalNpcHomes[name];
+                var npc = Game1.getCharacterFromName(name);
+                if (npc != null)
+                {
+                    npc.DefaultMap      = origMap;
+                    npc.DefaultPosition = origPos;
+                    Monitor.Log(
+                        $"Restored {npc.Name}'s home → {origMap} (no longer married to a MultiFarm player).",
+                        LogLevel.Info);
+                }
+                _originalNpcHomes.Remove(name);
+            }
         }
 
         private void OnSaveCreated(object? sender, SaveCreatedEventArgs e)
         {
             Game1.player.team.useSeparateWallets.Value = true;
             BuryCabins();
+        }
+
+        private void OnReturnedToTitle(object? sender, ReturnedToTitleEventArgs e)
+        {
+            // Drop everything tied to the world we just left so a subsequent save
+            // load starts clean.
+            FarmManager.ResetSessionTracking();
+            _originalNpcHomes.Clear();
         }
 
         private void OnSaving(object? sender, SavingEventArgs e)
@@ -330,13 +391,18 @@ namespace MultiFarm
             {
                 if (building.buildingType.Value == "Cabin")
                 {
-                    building.tileX.Value = -1000;
-                    building.tileY.Value = -1000;
+                    // Place stacked at (1,1) on the main farm — out of sight but still
+                    // on-map. Previously this used (-1000,-1000), which risked spawning
+                    // a not-yet-assigned farmhand off-map if they exited their cabin
+                    // door before picking a farm type. Real assignment via
+                    // PlayerFarmManager.RelocateCabin sets the proper coords later.
+                    building.tileX.Value = 1;
+                    building.tileY.Value = 1;
                     count++;
                 }
             }
             if (count > 0)
-                Monitor.Log($"BuryCabins: moved {count} cabin(s) off-map.", LogLevel.Debug);
+                Monitor.Log($"BuryCabins: parked {count} cabin(s) at farm corner.", LogLevel.Debug);
         }
 
         private void OnMenuChanged(object? sender, MenuChangedEventArgs e)

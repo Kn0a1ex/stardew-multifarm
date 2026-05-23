@@ -25,10 +25,25 @@ namespace MultiFarm
             if (__instance.source != CharacterCustomization.Source.HostNewFarm)
                 return;
 
-            // Force cabins to max so all farmhand slots are joinable.
-            // The engine requires one cabin per farmhand; MultiFarm hides the UI
-            // but still needs cabins present for the multiplayer connection mechanism.
-            Game1.startingCabins = Game1.CurrentPlayerLimit - 1;
+            // Cabin count must equal player-limit-minus-1 to match the mod's expected
+            // slot count. Game1.CurrentPlayerLimit is read-only (NetField-backed), so
+            // the host has to pick the matching value in the wrench (Advanced Options)
+            // menu themselves. Set startingCabins to the lesser of the two and warn if
+            // the wrench cap is below the mod's configured target.
+            int targetMax = ModEntry.Instance?.Config?.MaxPlayers ?? Game1.CurrentPlayerLimit;
+            if (targetMax < 2) targetMax = 2;
+            int effectiveMax = System.Math.Min(targetMax, Game1.CurrentPlayerLimit);
+            Game1.startingCabins = effectiveMax - 1;
+
+            if (targetMax > Game1.CurrentPlayerLimit)
+            {
+                _monitor?.Log(
+                    $"MultiFarm config wants {targetMax} player slots but the host menu's " +
+                    $"Max Players is set to {Game1.CurrentPlayerLimit}. Open the wrench " +
+                    $"(Advanced Options) and raise Max Players to {targetMax} to use all " +
+                    $"configured farm slots.",
+                    LogLevel.Warn);
+            }
 
             // Remove Starting Cabins arrow buttons.
             int removedLeft  = __instance.leftSelectionButtons .RemoveAll(b => b.name == "Cabins");

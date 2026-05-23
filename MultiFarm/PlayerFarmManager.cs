@@ -41,6 +41,13 @@ namespace MultiFarm
         // eastPathY:    Y tile of the east-edge exit path (Farm Hub arrival).
         // forestFacing: facing direction on arrival from Forest Hub (0=up for most farms, 3=left for Meadowlands).
         // Vanilla SDV 1.6 farm type IDs: 0-5 = classic types, 6 = Beach, 7 = Meadowlands.
+        //
+        // TODO(Beach): a dedicated PlayerFarm_Beach.tmx (80×104 with ocean east edge) does
+        // not yet exist, so type 6 currently reuses PlayerFarm_6.tmx — which is the
+        // Meadowlands layout (100×75 spring-island tileset). The dimensions/spawn here
+        // must match the actual TMX or warps end up off-map. When a real Beach map is
+        // added, restore the original Beach numbers (80×104, southX=81, eastPathY=17) and
+        // point the entry at PlayerFarm_Beach.tmx.
         private static readonly Dictionary<int, (string tmx, int caveX, int caveY,
                                                   int houseX, int houseY,
                                                   int spawnX, int spawnY,
@@ -53,7 +60,7 @@ namespace MultiFarm
             { 3, ("PlayerFarm_3.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17, 0) },
             { 4, ("PlayerFarm_4.tmx", 34,  5, 64, 14, 40, 5,  65, 40,  80, 17, 0) },
             { 5, ("PlayerFarm_5.tmx", 30, 35, 64, 14, 40, 5,  80, 40,  80, 17, 0) },
-            { 6, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 40, 1, 104, 81,  80, 17, 0) },  // Beach
+            { 6, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 63, 1,  75, 51, 100, 22, 3) },  // Beach (placeholder — uses Meadowlands TMX)
             { 7, ("PlayerFarm_6.tmx", 88, 54, 64, 14, 63, 1,  75, 51, 100, 22, 3) },  // Meadowlands
         };
 
@@ -326,6 +333,16 @@ namespace MultiFarm
             {
                 _monitor.Log($"Could not load assignments: {ex.Message}", LogLevel.Warn);
             }
+        }
+
+        /// <summary>
+        /// Reset per-session tracking. Called when a save is loaded or after returning
+        /// to title so a player who swaps between saves without restarting SMAPI still
+        /// gets starter items on the new save.
+        /// </summary>
+        public void ResetSessionTracking()
+        {
+            _starterItemsGiven.Clear();
         }
 
         public void SaveAssignments()
